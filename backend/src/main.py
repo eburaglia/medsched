@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from src.api.v1.endpoints import tenants
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -15,3 +16,12 @@ def health_check():
         "mensagem": "Cérebro MedSched operando com sucesso!",
         "arquitetura": "FastAPI + Docker"
     }
+
+# ---------------------------------------------------------
+# REGISTRO DOS ROTEADORES (Endpoints da API)
+# ---------------------------------------------------------
+app.include_router(
+    tenants.router, 
+    prefix="/api/v1/tenants", 
+    tags=["Tenants (Clínicas e Empresas)"]
+)
