@@ -1,0 +1,10 @@
+# Framework Web e Servidor
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# Banco de Dados (ORM e Conector Postgres)
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# Gerenciamento de Variáveis de Ambiente
+python-dotenv==1.0.1
