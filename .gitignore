@@ -1,0 +1,18 @@
+# Segurança: Variáveis de ambiente e segredos
+.env
+.env.*
+*.pem
+*.key
+
+# Arquivos de Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Pastas de dependências (adicionaremos mais no futuro dependendo da linguagem)
+node_modules/
+vendor/
+__pycache__/
+
+# Logs e Banco de Dados Local
+*.log
+*.sqlite
