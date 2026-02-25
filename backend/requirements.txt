@@ -5,6 +5,10 @@ uvicorn[standard]==0.27.1
 # Banco de Dados (ORM e Conector Postgres)
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
+alembic==1.13.1
 
 # Gerenciamento de Variáveis de Ambiente
 python-dotenv==1.0.1
+
+# Validadores Pydantic (Para o EmailStr funcionar)
+email-validator==2.1.0.post1
