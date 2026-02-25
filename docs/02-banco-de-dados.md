@@ -132,6 +132,35 @@ Gerencia a infraestrutura necessária para a execução de um serviço (Regra de
 | `deletado_por` | UUID | Não | ID do Admin que inativou. |
 
 
+## 5. Tabela `appointments` (A Agenda)
+O núcleo transacional do sistema. Conecta o Cliente, o Profissional, o Serviço e o Recurso em um espaço de tempo determinado.
 
+**Considerações de Segurança e Design:**
+* **Prevenção de Overbooking:** Utiliza `data_hora_inicio` e `data_hora_fim` (UTC) para cálculos de colisão no banco de dados.
+* **Integridade Histórica:** Os campos `duracao_aplicada` e `preco_aplicado` garantem que alterações futuras no catálogo de serviços não corrompam o histórico financeiro e de auditoria dos agendamentos passados.
+* **Agrupamento Lógico:** O `grupo_recorrencia_id` suporta a manipulação em lote de agendamentos periódicos (RN-05).
+* **Auditoria de Status:** A máquina de estados (ENUM) permite rastrear com precisão a origem de cancelamentos e abstenções (`no_show`).
+
+| Coluna | Tipo de Dado | Obrigatório | Descrição / Regra de Negócio |
+| :--- | :--- | :---: | :--- |
+| `id` | UUID | Sim | (PK) Identificador único da reserva. |
+| `tenant_id` | UUID | Sim | (FK) Trava de segurança principal do multi-tenant. |
+| `cliente_id` | UUID | Sim | (FK) Usuário que receberá o atendimento. |
+| `profissional_id` | UUID | Sim | (FK) Usuário que prestará o atendimento. |
+| `servico_id` | UUID | Sim | (FK) O procedimento a ser realizado. |
+| `recurso_id` | UUID | Não | (FK) A infraestrutura alocada (opcional). |
+| `status` | ENUM | Sim | Valores: `pendente`, `confirmado`, `concluido`, `cancelado_cliente`, `cancelado_profissional`, `no_show`. |
+| `data_hora_inicio` | TIMESTAMP | Sim | Início exato do atendimento (UTC). |
+| `data_hora_fim` | TIMESTAMP | Sim | Fim exato do atendimento (UTC). |
+| `duracao_aplicada` | INT | Sim | Duração efetiva em minutos. |
+| `preco_aplicado` | DECIMAL(10,2)| Sim | Valor "congelado" no momento da reserva. |
+| `grupo_recorrencia_id`| UUID | Não | Agrupa atendimentos periódicos. |
+| `observacoes_cliente` | TEXT | Não | Mensagem enviada pelo cliente. |
+| `observacoes_internas`| TEXT | Não | Prontuário básico ou notas da clínica. |
+| **[AUDITORIA]** | | | *Rastreabilidade de alterações.* |
+| `criado_em` | TIMESTAMP | Sim | Data da solicitação. |
+| `criado_por` | UUID | Não | Quem registrou (Nulo se auto-atendimento). |
+| `alterado_em` | TIMESTAMP | Não | Data da remarcação. |
+| `alterado_por` | UUID | Não | Quem remarcou. |
 
 
