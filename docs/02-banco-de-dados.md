@@ -79,6 +79,32 @@ Armazena todos os indivíduos que interagem com um Tenant específico. O isolame
 | `deletado_em` | TIMESTAMP | Não | Data de inativação (Soft Delete). |
 | `deletado_por` | UUID | Não | ID do Admin que inativou. |
 
+## 3. Tabela `services` (Catálogo de Serviços)
+Armazena os serviços oferecidos por um Tenant. O catálogo é global para a clínica/empresa, permitindo que múltiplos profissionais executem o mesmo serviço através de uma futura tabela de ligação (N:N).
+
+**Considerações de Segurança e Design:**
+* **Matemática de Tempo:** A duração é salva estritamente em minutos (`INT`) para garantir a performance e exatidão do algoritmo de cálculo de conflitos na agenda.
+* **Precisão Financeira:** Valores monetários utilizam `DECIMAL(10,2)` para evitar erros de arredondamento de ponto flutuante comuns em computação.
+* **Mídias Externas:** Imagens/GIFs para o menu do cliente final são armazenadas em nuvem (S3), salvando apenas a URL no banco para otimização de I/O.
+
+| Coluna | Tipo de Dado | Obrigatório | Descrição / Regra de Negócio |
+| :--- | :--- | :---: | :--- |
+| `id` | UUID | Sim | (PK) Identificador único do serviço. |
+| `tenant_id` | UUID | Sim | (FK) Trava de segurança. Garante o isolamento do catálogo. |
+| `status` | ENUM | Sim | Valores: `ativo`, `inativo`. Oculta o serviço do menu do cliente. |
+| `nome` | VARCHAR(255) | Sim | Nome comercial do serviço (ex: "Consulta de Rotina"). |
+| `duracao_minutos` | INT | Sim | Duração base matemática (ex: 30, 60, 90). |
+| `preco` | DECIMAL(10,2) | Não | Valor de face do serviço. |
+| `imagem_url` | VARCHAR(500) | Não | Link apontando para a nuvem com a imagem/gif do serviço. |
+| `observacoes` | TEXT | Não | Descrição detalhada ou anotações internas. |
+| **[AUDITORIA]** | | | *Rastreabilidade de alterações.* |
+| `criado_em` | TIMESTAMP | Sim | Data e hora exata do registro. |
+| `criado_por` | UUID | Não | ID do Admin que cadastrou. |
+| `alterado_em` | TIMESTAMP | Não | Data da última edição. |
+| `alterado_por` | UUID | Não | ID de quem editou. |
+| `deletado_em` | TIMESTAMP | Não | Data de inativação (Soft Delete). |
+| `deletado_por` | UUID | Não | ID do Admin que inativou. |
+
 
 
 
