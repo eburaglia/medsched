@@ -105,6 +105,33 @@ Armazena os serviços oferecidos por um Tenant. O catálogo é global para a cl�
 | `deletado_em` | TIMESTAMP | Não | Data de inativação (Soft Delete). |
 | `deletado_por` | UUID | Não | ID do Admin que inativou. |
 
+## 4. Tabela `resources` (Salas e Equipamentos)
+Gerencia a infraestrutura necessária para a execução de um serviço (Regra de Negócio 02). Garante que recursos físicos (como salas de cirurgia) ou lógicos (links de conferência) não sofram *overbooking* (reservas duplicadas no mesmo horário).
+
+**Considerações de Segurança e Design:**
+* **Controle de Lotação:** O campo `capacidade_maxima` permite que o sistema suporte tanto atendimentos individuais (padrão 1) quanto serviços em grupo (ex: turmas de Pilates).
+* **Governança de Uso:** O campo `requer_aprovacao` trava a alocação de recursos críticos até que um Tenant Admin libere o agendamento.
+* **Manutenção Preventiva:** O `status` inativo retira o equipamento temporariamente da grade sem a necessidade de exclusão dos dados históricos.
+
+| Coluna | Tipo de Dado | Obrigatório | Descrição / Regra de Negócio |
+| :--- | :--- | :---: | :--- |
+| `id` | UUID | Sim | (PK) Identificador único do recurso. |
+| `tenant_id` | UUID | Sim | (FK) Trava de isolamento. Pertence a uma única clínica. |
+| `status` | ENUM | Sim | Valores: `ativo`, `inativo` (manutenção/indisponível). |
+| `nome` | VARCHAR(255) | Sim | Identificação (ex: "Sala de Cirurgia", "Box 03"). |
+| `tipo` | ENUM | Sim | Valores: `fisico`, `online`. |
+| `capacidade_maxima` | INT | Sim | Limite de agendamentos simultâneos (Padrão: 1). |
+| `requer_aprovacao` | BOOLEAN | Sim | Se `true`, exige liberação de um Admin. |
+| `observacoes` | TEXT | Não | Detalhes técnicos ou links fixos (ex: URL do Zoom). |
+| **[AUDITORIA]** | | | *Rastreabilidade de alterações.* |
+| `criado_em` | TIMESTAMP | Sim | Data e hora exata do registro. |
+| `criado_por` | UUID | Não | ID do Admin que cadastrou. |
+| `alterado_em` | TIMESTAMP | Não | Data da última edição. |
+| `alterado_por` | UUID | Não | ID de quem editou. |
+| `deletado_em` | TIMESTAMP | Não | Data de inativação (Soft Delete). |
+| `deletado_por` | UUID | Não | ID do Admin que inativou. |
+
+
 
 
 
