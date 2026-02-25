@@ -31,17 +31,35 @@ services:
       dockerfile: Dockerfile
     container_name: medsched-api
     restart: unless-stopped
-    # Mapeamento: Porta 40000 no seu servidor -> Porta 8000 no container
     ports:
       - "40000:8000"
-    # Sincroniza o seu código local com o container (não precisa reiniciar pra ver mudanças)
     volumes:
       - ./backend:/app
-    # Injeta as variáveis de ambiente e garante que a API só suba DEPOIS do banco
     env_file:
       - .env
     depends_on:
       - db
+    networks:
+      - medsched_net
+
+  # ----------------------------------------
+  # CAMADA VISUAL: Frontend React (Vite)
+  # ----------------------------------------
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medsched-web
+    restart: unless-stopped
+    # Mapeamento: Porta 40001 no seu servidor -> Porta 3000 no container
+    ports:
+      - "40001:3000"
+    volumes:
+      - ./frontend:/app
+      # Este volume anônimo impede que a pasta node_modules do container seja sobrescrita pelo host
+      - /app/node_modules
+    depends_on:
+      - api
     networks:
       - medsched_net
 
@@ -59,5 +77,3 @@ networks:
   medsched_net:
     name: medsched_net
     driver: bridge
-
-
