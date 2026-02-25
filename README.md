@@ -3,27 +3,31 @@
 Sistema robusto de agendamento de serviços, projetado com arquitetura Multi-Tenant nativa (SaaS), alta segurança de isolamento de dados e design responsivo.
 
 ## 📌 Status Atual do Projeto
-**Fase Atual:** Iniciando Fase 4 (Implementação e Persistência)
+**Fase Atual:** Fase 4 (Implementação da API RESTful e Regras de Negócio)
 
 ### ✅ O Que Já Foi Concluído (Fases 1 a 3)
 
 * **Fase 1: Escopo e Regras de Negócio**
   * Definição de arquitetura SaaS Multi-Tenant.
-  * Estabelecimento de regras de aprovação de cadastros, auditoria de dados e gestão de recursos físicos/online para prevenção de *overbooking*.
+  * Regras de prevenção de *overbooking* e auditoria.
 * **Fase 2: Modelagem de Dados Relacional**
-  * Adoção de **Isolamento Lógico (Row-level)** via `tenant_id` (UUID).
-  * Desenho de 5 tabelas fundamentais: `tenants` (Empresas), `users` (Atores), `services` (Catálogo), `resources` (Salas/Equipamentos) e `appointments` (Agenda Transacional).
-  * Implementação rigorosa de campos de auditoria (Criação, Alteração e Soft Delete).
+  * Desenho lógico de 5 tabelas de negócio e 1 tabela de isolamento (Super Admin).
 * **Fase 3: Infraestrutura e Stack Tecnológica**
-  * Implementação de ambiente 100% conteinerizado (Docker e Docker Compose).
-  * **Banco de Dados (Porta 45432):** PostgreSQL 15.
-  * **Backend / API (Porta 40000):** Python 3.11 com FastAPI (Arquitetura REST).
-  * **Frontend / UI (Porta 40001):** React.js com Vite (Mobile-First SPA).
-  * **Controle de Versão:** Adoção do padrão Git Flow, com separação estrita entre a branch `main` (Produção) e `develop` (Bancada de Trabalho).
+  * Ambiente 100% conteinerizado (Docker Compose).
+  * Backend API (FastAPI) na porta `40000`.
+  * Frontend UI (React/Vite) na porta `40001`.
+  * Banco de Dados (PostgreSQL) na porta `45432`.
+
+### 🏗️ Fase 4: Persistência e API (Em Andamento)
+
+* **ORM e Banco de Dados (Concluído):**
+  * Abordagem *Code-First* implementada com SQLAlchemy.
+  * Modelos criados: `Tenant`, `User`, `Service`, `Resource`, `Appointment` e a tabela isolada de backoffice `SuperAdmin`.
+  * DNA de Auditoria centralizado via `AuditoriaMixin` (UUIDs nativos, Soft Delete, Rastreamento de autoria).
+  * Motor de migrações estruturais implementado e executado via **Alembic**. Banco de dados físico sincronizado com o código Python.
+* **Próximo Passo Lógico:** Construção dos Endpoints (Rotas), Schemas (Pydantic) e CRUD para a entidade raiz (`Tenant`).
 
 ## 🚀 Como Rodar o Ambiente Local
-
-O projeto exige o Docker instalado na máquina host.
 
 1. Clone este repositório.
 2. Crie um arquivo `.env` na raiz (utilize os parâmetros padrão do time de desenvolvimento).
@@ -32,8 +36,7 @@ O projeto exige o Docker instalado na máquina host.
    docker compose up -d --build
 
 
-
-Acesso aos serviços:
+Documentação da API (Swagger): http://localhost:40000/docs
 Frontend (React): http://localhost:40001
-Backend API (FastAPI): http://localhost:40000
+Backend API (FastAPI): http://localhost:40000 
 Banco de Dados: localhost:45432
