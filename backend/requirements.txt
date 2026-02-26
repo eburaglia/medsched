@@ -12,3 +12,8 @@ python-dotenv==1.0.1
 
 # Validadores Pydantic (Para o EmailStr funcionar)
 email-validator==2.1.0.post1
+
+# ---------------------------------------------------------
+# 🛡️ SEGURANÇA E CRIPTOGRAFIA DE SENHAS
+# ---------------------------------------------------------
+passlib[bcrypt]==1.7.4

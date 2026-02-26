@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, String, Integer, Text, DateTime, Enum
+from sqlalchemy import Column, String, Integer, Text, DateTime, Enum, Identity
 from src.database import Base
 from src.models.base import AuditoriaMixin
 
@@ -14,8 +14,15 @@ class TenantStatus(str, enum.Enum):
 class Tenant(AuditoriaMixin, Base):
     __tablename__ = "tenants"
 
-    # Identificador amigável de auto-incremento para humanos e relatórios
-    codigo_visual = Column(Integer, autoincrement=True, unique=True, index=True, nullable=False)
+    # Identificador amigável de auto-incremento para humanos e relatórios.
+    # Utilizando Identity nativo do PostgreSQL iniciando em 10000 para aspecto profissional.
+    codigo_visual = Column(
+        Integer, 
+        Identity(start=10000, cycle=False), 
+        unique=True, 
+        index=True, 
+        nullable=False
+    )
     
     # Status com trava de segurança via Enum
     status = Column(Enum(TenantStatus), default=TenantStatus.PHASE_IN, nullable=False)
