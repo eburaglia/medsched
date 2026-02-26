@@ -30,6 +30,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: medsched-api
+    # ----------------------------------------
+    # 🔒 CORREÇÃO DE PERMISSÕES DO ALEMBIC
+    # Garante que os arquivos gerados pertençam ao medicaluser (124:127)
+    # ----------------------------------------
+    user: "124:127"
     restart: unless-stopped
     ports:
       - "40000:8000"
