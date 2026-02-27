@@ -8,5 +8,7 @@ from src.models.service import Service
 from src.models.resource import Resource
 from src.models.appointment import Appointment
 
+from src.models.customer import Customer
+
 # A Tabela de Backoffice (Isolada do ecossistema de Tenants)
 from src.models.super_admin import SuperAdmin

@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
+
 # Carrega as senhas e variáveis do arquivo .env (que está na raiz do projeto)
 load_dotenv()
 

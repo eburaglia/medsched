@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-# Adicionamos o 'user' na nossa lista de importações dos endpoints
-from src.api.v1.endpoints import tenants, user, auth
+# Adicionamos o 'user' e agora o 'customer' na nossa lista de importações
+from src.api.v1.endpoints import tenants, user, auth, customer
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -27,7 +27,7 @@ app.include_router(
     tags=["Tenants (Clínicas e Empresas)"]
 )
 
-# Registrando o nosso novo roteador de Usuários.
+# Registrando o nosso roteador de Usuários.
 # Como o router lá no arquivo user.py já possui o prefix="/users",
 # aqui nós apenas empacotamos ele na versão v1 da API.
 # O resultado final das rotas será: /api/v1/users/...
@@ -36,9 +36,17 @@ app.include_router(
     prefix="/api/v1"
 )
 
-# 2. Registre o Roteador de Autenticação
+# Registrando o Roteador de Autenticação
 app.include_router(
     auth.router,
     prefix="/api/v1/auth",
     tags=["Autenticação"]
+)
+
+# 👇 NOSSA NOVA ADIÇÃO: O Roteador de Clientes!
+# Como o router lá no arquivo customer.py já possui o prefix="/customers",
+# o resultado final será: /api/v1/customers/...
+app.include_router(
+    customer.router,
+    prefix="/api/v1"
 )
