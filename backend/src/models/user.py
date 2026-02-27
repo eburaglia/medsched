@@ -1,29 +1,29 @@
 import enum
-from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Text, Integer, Boolean
+from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from src.database import Base
 from src.models.base import AuditoriaMixin
 
-# 1. Domínio de Valores: Fluxo de Vida do Usuário
+# ---------------------------------------------------------
+# 1. Status: Conforme o Padrão do seu Banco (MAIÚSCULO)
+# ---------------------------------------------------------
 class UserStatus(str, enum.Enum):
-    PENDENTE = "pendente"
-    ATIVO = "ativo"
-    INATIVO = "inativo"
+    PENDENTE = "PENDENTE"
+    ATIVO = "ATIVO"
+    INATIVO = "INATIVO"
 
-# 2. Domínio de Valores: Controle de Acesso (RBAC)
+# ---------------------------------------------------------
+# 2. Papéis: Conforme a Lista Real do seu PostgreSQL
+# ---------------------------------------------------------
 class UserRole(str, enum.Enum):
-    TENANT_ADMIN = "tenant_admin"
-    MEDICO = "medico"           
-    RECEPCAO = "recepcao"         
-    CLIENTE = "cliente"           
+    TENANT_ADMIN = "TENANT_ADMIN"
+    PROFISSIONAL = "PROFISSIONAL"  # Use este para Médicos/Prestadores
+    CLIENTE = "CLIENTE"
 
 class User(AuditoriaMixin, Base):
     __tablename__ = "users"
 
-    # ---------------------------------------------------------
-    # 🏢 ISOLAMENTO MULTI-TENANT (Preservado integralmente)
-    # ---------------------------------------------------------
     tenant_id = Column(
         UUID(as_uuid=True), 
         ForeignKey("tenants.id", ondelete="CASCADE"), 
@@ -31,15 +31,17 @@ class User(AuditoriaMixin, Base):
         index=True
     )
 
-    # ---------------------------------------------------------
-    # ⚙ CONTROLE DE ACESSO E STATUS
-    # ---------------------------------------------------------
-    status = Column(Enum(UserStatus), default=UserStatus.PENDENTE, nullable=False)
-    papel = Column(Enum(UserRole), nullable=False)
+    # Enviando sempre o .value para garantir compatibilidade
+    status = Column(
+        Enum(UserStatus, values_callable=lambda obj: [e.value for e in obj]), 
+        default=UserStatus.PENDENTE, 
+        nullable=False
+    )
+    papel = Column(
+        Enum(UserRole, values_callable=lambda obj: [e.value for e in obj]), 
+        nullable=False
+    )
 
-    # ---------------------------------------------------------
-    # 👤 DADOS PESSOAIS E DE LOGIN
-    # ---------------------------------------------------------
     nome = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
     cpf = Column(String(20), nullable=True, unique=True, index=True)
@@ -47,22 +49,13 @@ class User(AuditoriaMixin, Base):
     telefone_contato = Column(String(20), nullable=True)
     observacoes = Column(Text, nullable=True)
 
-    # ---------------------------------------------------------
-    # 📍 ENDEREÇO
-    # ---------------------------------------------------------
     endereco_logradouro = Column(String(255), nullable=True)
     endereco_cidade = Column(String(100), nullable=True)
     endereco_estado = Column(String(2), nullable=True)
     endereco_regiao = Column(String(50), nullable=True)
 
-    # ---------------------------------------------------------
-    # 🔐 SEGURANÇA E RECUPERAÇÃO DE SENHA
-    # ---------------------------------------------------------
     senha_hash = Column(String(255), nullable=False)
     recuperacao_token = Column(String(100), nullable=True, index=True)
     recuperacao_expira = Column(DateTime, nullable=True)
 
-    # ---------------------------------------------------------
-    # 🔗 RELACIONAMENTOS ORM
-    # ---------------------------------------------------------
     tenant = relationship("Tenant", backref="users")

@@ -15,5 +15,7 @@ email-validator==2.1.0.post1
 
 # ---------------------------------------------------------
 # 🛡️ SEGURANÇA E CRIPTOGRAFIA DE SENHAS
+# Correção do bug de 72 bytes: bcrypt fixado na v3.2.2
 # ---------------------------------------------------------
-passlib[bcrypt]==1.7.4
+passlib==1.7.4
+bcrypt==3.2.2
