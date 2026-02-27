@@ -3,4 +3,17 @@ docker compose exec api python -c "from src.database import engine; from sqlalch
 
 👉 SEU TENANT ID REAL É: [{'id': UUID('890b6bd6-9be8-4f7f-a173-e51e0c22fc2d'), 'nome_fantasia': 'Vida Saudável'}] 
 
+medicaluser@lrnbt04:/opt/medsched$ docker compose exec db psql -U meduser -d medsched_db -c "SELECT id, nome FROM tenants;"
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  role "meduser" does not exist
+medicaluser@lrnbt04:/opt/medsched$ docker compose exec api python -c "from src.database import engine; from sqlalchemy import text; conn = engine.connect(); result = conn.execute(text('SELECT id, nome FROM users')); print('\n👉 SEUS USUÁRIOS SÃO:', [dict(r._mapping) for r in result], '\n'); conn.close()"
 
+👉 SEUS USUÁRIOS SÃO: [{'id': UUID('b5e0f45e-9508-4c79-8ee8-5e7311c6dde3'), 'nome': 'Dr. João Silva'}, {'id': UUID('be7adb0d-28ae-48b5-ab94-436bb1de7c9e'), 'nome': 'Dra. Maria Souza'}] 
+
+medicaluser@l
+
+
+medicaluser@lrnbt04:/opt/medsched$ vi docs/tips.txt 
+medicaluser@lrnbt04:/opt/medsched$ docker compose exec api python -c "from src.database import engine; from sqlalchemy import text; conn = engine.connect(); result = conn.execute(text('SELECT id, nome FROM customers')); print('\n👉 SEUS CLIENTES SÃO:', [dict(r._mapping) for r in result], '\n'); conn.close()"
+
+👉 SEUS CLIENTES SÃO: [{'id': UUID('8f972d07-2950-4041-a731-b042221fe141'), 'nome': 'João da Silva'}] 
+r
