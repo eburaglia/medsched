@@ -1,0 +1,6 @@
+# Como identificar o uuid dos tenants
+docker compose exec api python -c "from src.database import engine; from sqlalchemy import text; conn = engine.connect(); result = conn.execute(text('SELECT id, nome_fantasia FROM tenants LIMIT 1')); print('\n👉 SEU TENANT ID REAL É:', [dict(r._mapping) for r in result], '\n'); conn.close()"
+
+👉 SEU TENANT ID REAL É: [{'id': UUID('890b6bd6-9be8-4f7f-a173-e51e0c22fc2d'), 'nome_fantasia': 'Vida Saudável'}] 
+
+

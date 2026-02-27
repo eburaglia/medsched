@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 # Adicionamos o 'user' na nossa lista de importações dos endpoints
-from src.api.v1.endpoints import tenants, user
+from src.api.v1.endpoints import tenants, user, auth
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -34,4 +34,11 @@ app.include_router(
 app.include_router(
     user.router,
     prefix="/api/v1"
+)
+
+# 2. Registre o Roteador de Autenticação
+app.include_router(
+    auth.router,
+    prefix="/api/v1/auth",
+    tags=["Autenticação"]
 )

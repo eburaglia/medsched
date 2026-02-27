@@ -3,12 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
 
-# Importamos a dependência do banco de dados (Ajuste o caminho se necessário)
 from src.database import get_db
-
-# Importamos nossos Schemas (Validação) e CRUD (Regra de negócio)
 from src.schemas.user import UserCreate, UserUpdate, UserResponse
 from src.crud import user as crud_user
+from src.api.deps import get_current_user
+from src.models.user import User
 
 # ---------------------------------------------------------
 # 🚦 CONFIGURAÇÃO DO ROTEADOR
@@ -19,7 +18,7 @@ router = APIRouter(
 )
 
 # ---------------------------------------------------------
-# ✍️ ENDPOINT: CRIAR USUÁRIO
+# ✍ ENDPOINT: CRIAR USUÁRIO
 # ---------------------------------------------------------
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -37,6 +36,18 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
     
     # Se passou pela validação, cria o usuário
     return crud_user.create_user(db=db, obj_in=user_in)
+
+# ---------------------------------------------------------
+# 🛡️ ENDPOINT: BUSCAR PERFIL LOGADO (/me)
+# ---------------------------------------------------------
+# IMPORTANTE: Esta rota estática DEVE vir antes das rotas dinâmicas (/{user_id})
+@router.get("/me", response_model=UserResponse)
+def read_user_me(current_user: User = Depends(get_current_user)):
+    """
+    Retorna os dados do próprio usuário autenticado.
+    O crachá JWT é exigido automaticamente pela injeção de dependência.
+    """
+    return current_user
 
 # ---------------------------------------------------------
 # 🔍 ENDPOINT: LISTAR USUÁRIOS (POR TENANT)
