@@ -163,4 +163,53 @@ O núcleo transacional do sistema. Conecta o Cliente, o Profissional, o Serviço
 | `alterado_em` | TIMESTAMP | Não | Data da remarcação. |
 | `alterado_por` | UUID | Não | Quem remarcou. |
 
+## Informacoes inseridas em 20260226
+## Visão Geral
+O sistema utiliza **PostgreSQL 15** (via Docker) com uma arquitetura **Multi-Tenant**. O isolamento dos dados é garantido pela coluna `tenant_id` em todas as tabelas principais.
 
+## Tipos Enumerados (Enums)
+Uma descoberta crítica na Fase 3 revelou que o PostgreSQL armazena os valores de forma rígida. A sincronização com o SQLAlchemy deve respeitar a capitalização exata definida na criação do tipo no DB.
+
+### 1. UserStatus
+Utilizado para o fluxo de vida da conta do utilizador.
+- **Valores (MAIÚSCULO):** `PENDENTE`, `ATIVO`, `INATIVO`.
+- **Comportamento:** O código Python deve enviar a string em maiúsculo.
+
+### 2. UserRole
+Define o nível de acesso (RBAC).
+- **Valores (MAIÚSCULO):** - `TENANT_ADMIN`: Administrador da clínica/tenant.
+  - `PROFISSIONAL`: Médicos, dentistas e prestadores de serviço.
+  - `CLIENTE`: Pacientes ou utilizadores finais.
+- **Nota:** O valor `medico` foi depreciado em favor de `PROFISSIONAL` para manter a compatibilidade com a estrutura legada do banco.
+
+---
+
+## Dicionário de Dados: Tabela `users`
+
+| Coluna | Tipo | Descrição |
+| :--- | :--- | :--- |
+| `id` | UUID (PK) | Identificador único gerado automaticamente. |
+| `tenant_id` | UUID (FK) | Identificador da clínica (Relacionamento com `tenants.id`). |
+| `nome` | VARCHAR(255) | Nome completo do utilizador. |
+| `email` | VARCHAR(255) | E-mail (único, indexado, usado para login). |
+| `cpf` | VARCHAR(20) | CPF (único, indexado). |
+| `telefone` | VARCHAR(20) | Telefone principal. |
+| `telefone_contato`| VARCHAR(20) | Telefone secundário/contato de emergência. |
+| `observacoes` | TEXT | Notas gerais sobre o utilizador. |
+| `status` | ENUM | Estado da conta (Default: `PENDENTE`). |
+| `papel` | ENUM | Nível de acesso (Ex: `PROFISSIONAL`). |
+| `senha_hash` | VARCHAR(255) | Hash da senha gerado via Bcrypt (passlib). |
+| `criado_em` | DATETIME | Carimbo de data/hora da criação (via AuditoriaMixin). |
+
+### Endereço (Colunas Independentes)
+Para facilitar buscas geográficas, o endereço é armazenado de forma desnormalizada na tabela de utilizadores:
+- `endereco_logradouro` (VARCHAR 255)
+- `endereco_cidade` (VARCHAR 100)
+- `endereco_estado` (VARCHAR 2)
+- `endereco_regiao` (VARCHAR 50)
+
+---
+
+## Notas de Manutenção
+- **Segurança:** A coluna `senha_hash` nunca deve ser incluída em consultas de listagem ou schemas de resposta (UserResponse).
+- **Migrações:** Todas as alterações estruturais são geridas pelo **Alembic**.
