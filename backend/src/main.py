@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 # Adicionamos o 'appointment' na nossa lista de importações
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -51,5 +51,10 @@ app.include_router(
 # 👇 O Roteador do Catálogo de Serviços!
 app.include_router(
     service.router,
+    prefix="/api/v1"
+)
+# 👇 O Roteador de Recursos (Salas e Equipamentos)
+app.include_router(
+    resource.router,
     prefix="/api/v1"
 )
