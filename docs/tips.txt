@@ -16,4 +16,8 @@ medicaluser@lrnbt04:/opt/medsched$ vi docs/tips.txt
 medicaluser@lrnbt04:/opt/medsched$ docker compose exec api python -c "from src.database import engine; from sqlalchemy import text; conn = engine.connect(); result = conn.execute(text('SELECT id, nome FROM customers')); print('\n👉 SEUS CLIENTES SÃO:', [dict(r._mapping) for r in result], '\n'); conn.close()"
 
 👉 SEUS CLIENTES SÃO: [{'id': UUID('8f972d07-2950-4041-a731-b042221fe141'), 'nome': 'João da Silva'}] 
-r
+
+
+
+maria@clinica.com
+SenhaSimples123r
