@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 # Adicionamos o 'appointment' na nossa lista de importações
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource,import_data
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -58,3 +58,10 @@ app.include_router(
     resource.router,
     prefix="/api/v1"
 )
+# 👇 O Roteador de Upload / ETL
+app.include_router(
+    import_data.router,
+    prefix="/api/v1"
+)
+
+

@@ -23,3 +23,6 @@ python-jose[cryptography]==3.3.0
 
 # Biblioteca para ler Formulários (Necessária para o Login OAuth2)
 python-multipart==0.0.9
+python-multipart
+pandas
+openpyxl

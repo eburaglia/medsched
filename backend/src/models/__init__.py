@@ -12,3 +12,6 @@ from src.models.customer import Customer
 
 # A Tabela de Backoffice (Isolada do ecossistema de Tenants)
 from src.models.super_admin import SuperAdmin
+
+# 👇 O nosso motor de ETL e Staging Area!
+from src.models.import_staging import ImportBatch, ImportRow
