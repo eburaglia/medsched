@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 # Adicionamos o 'appointment' na nossa lista de importações
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource,import_data, service_record
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource,import_data, service_record, financial
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -67,5 +67,11 @@ app.include_router(
 # 👇 NOSSA NOVA ADIÇÃO: Registros de Atendimento (Prontuário/Fichas)
 app.include_router(
     service_record.router,
+    prefix="/api/v1"
+)
+
+# 👇 NOSSA NOVA ADIÇÃO: O Módulo Financeiro!
+app.include_router(
+    financial.router,
     prefix="/api/v1"
 )
