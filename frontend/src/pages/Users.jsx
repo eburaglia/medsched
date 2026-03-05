@@ -5,7 +5,7 @@ import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, CheckSquare
 } from 'lucide-react';
 
 export default function Users() {
@@ -20,9 +20,12 @@ export default function Users() {
   const [showAddMenu, setShowAddMenu] = useState(false);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); 
+  const [modalMode, setModalMode] = useState('create'); // 'create', 'edit', 'batch-edit'
   const [isSaving, setIsSaving] = useState(false);
   
+  // Toggles para saber quais campos sobrescrever na edição em lote
+  const [batchToggles, setBatchToggles] = useState({ papel: false, status: false });
+
   const [formData, setFormData] = useState({
     nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', tenant_id: ''
   });
@@ -51,45 +54,23 @@ export default function Users() {
 
   useEffect(() => { fetchUsers(); }, []);
 
-  // 1. LÓGICA DE EXPORTAÇÃO CSV (DINÂMICA)
   const handleExportCSV = () => {
-    // Define quais dados exportar (selecionados ou filtrados)
-    const dataToExport = selectedUsers.length > 0 
-      ? users.filter(u => selectedUsers.includes(u.id)) 
-      : filteredUsers;
-
-    if (dataToExport.length === 0) {
-      toast.error("Nenhum dado para exportar.");
-      return;
-    }
-
-    // Filtra apenas as colunas que estão visíveis na tela
-    const headers = Object.keys(visibleColumns).filter(key => visibleColumns[key]);
+    const dataToExport = selectedUsers.length > 0 ? users.filter(u => selectedUsers.includes(u.id)) : filteredUsers;
+    if (dataToExport.length === 0) return toast.error("Nenhum dado para exportar.");
     
-    // Cria o conteúdo do CSV
-    const csvRows = [];
-    csvRows.push(headers.join(',')); // Linha de cabeçalho
+    const headers = Object.keys(visibleColumns).filter(key => visibleColumns[key]);
+    const csvRows = [headers.join(',')];
 
     for (const row of dataToExport) {
-      const values = headers.map(header => {
-        const val = row[header === 'role' ? 'papel' : header] || row[header] || '';
-        return `"${String(val).replace(/"/g, '""')}"`; // Escapa aspas
-      });
+      const values = headers.map(header => `"${String(row[header === 'role' ? 'papel' : header] || row[header] || '').replace(/"/g, '""')}"`);
       csvRows.push(values.join(','));
     }
 
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    // Gatilho de download
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `medsched_usuarios_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `medsched_usuarios_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    document.body.removeChild(link);
-    
     toast.success(`${dataToExport.length} registros exportados!`);
   };
 
@@ -119,38 +100,59 @@ export default function Users() {
     setIsModalOpen(true);
   };
 
+  // 1. EDIÇÃO INTELIGENTE (Detecta se é 1 ou Vários)
   const handleOpenEdit = () => {
     if (selectedUsers.length === 1) {
       const userToEdit = users.find(u => u.id === selectedUsers[0]);
       setFormData({
-        nome: userToEdit.nome,
-        email: userToEdit.email,
-        papel: userToEdit.papel || userToEdit.role,
-        status: userToEdit.status,
-        senha: '',
-        tenant_id: userToEdit.tenant_id
+        nome: userToEdit.nome, email: userToEdit.email, papel: userToEdit.papel || userToEdit.role,
+        status: userToEdit.status, senha: '', tenant_id: userToEdit.tenant_id
       });
       setModalMode('edit');
+      setIsModalOpen(true);
+    } else if (selectedUsers.length > 1) {
+      setModalMode('batch-edit');
+      setBatchToggles({ papel: false, status: false });
+      setFormData({ nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id });
       setIsModalOpen(true);
     }
   };
 
+  // 2. SALVAR MODO LOTE
   const handleSaveUser = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     try {
       if (modalMode === 'create') {
         await api.post('/users/', { ...formData });
-        toast.success("Criado!");
-      } else {
+        toast.success("Usuário criado com sucesso!");
+      } else if (modalMode === 'edit') {
         await api.put(`/users/${selectedUsers[0]}`, { nome: formData.nome, papel: formData.papel, status: formData.status }, { params: { tenant_id: formData.tenant_id } });
-        toast.success("Atualizado!");
+        toast.success("Usuário atualizado!");
+        setSelectedUsers([]);
+      } else if (modalMode === 'batch-edit') {
+        // Monta o Payload apenas com o que o admin marcou para sobrescrever
+        const payload = {};
+        if (batchToggles.papel) payload.papel = formData.papel;
+        if (batchToggles.status) payload.status = formData.status;
+
+        if (Object.keys(payload).length === 0) {
+          toast.error("Selecione pelo menos um campo para alterar.");
+          setIsSaving(false);
+          return;
+        }
+
+        const loadingToast = toast.loading(`Atualizando ${selectedUsers.length} registros...`);
+        for (const userId of selectedUsers) {
+          await api.put(`/users/${userId}`, payload, { params: { tenant_id: formData.tenant_id } });
+        }
+        toast.success("Edição em lote concluída!", { id: loadingToast });
         setSelectedUsers([]);
       }
       setIsModalOpen(false);
       fetchUsers(); 
     } catch (err) {
-      toast.error("Erro.");
+      toast.error("Erro na operação.");
     } finally {
       setIsSaving(false);
     }
@@ -165,42 +167,78 @@ export default function Users() {
     <div className="p-8 max-w-7xl mx-auto flex flex-col h-[calc(100vh-4rem)]">
       <Toaster position="top-right" />
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : "Editar Usuário"}>
+      {/* TÍTULO DINÂMICO DO MODAL */}
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}
+      >
         <form onSubmit={handleSaveUser} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Nome</label>
-            <input required className="w-full px-4 py-2 border rounded-lg" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">E-mail</label>
-            <input required disabled={modalMode === 'edit'} className="w-full px-4 py-2 border rounded-lg" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Cargo</label>
-              <select className="w-full px-4 py-2 border rounded-lg bg-white" value={formData.papel} onChange={e => setFormData({...formData, papel: e.target.value})}>
+          
+          {modalMode === 'batch-edit' && (
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-800 flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p>Você está editando <strong>{selectedUsers.length} usuários</strong> simultaneamente. Marque apenas os campos que deseja sobrescrever.</p>
+            </div>
+          )}
+
+          {/* Oculta Nome, E-mail e Senha na edição em lote */}
+          {modalMode !== 'batch-edit' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <input required className="w-full px-4 py-2 border rounded-lg" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">E-mail</label>
+                <input required disabled={modalMode === 'edit'} className={`w-full px-4 py-2 border rounded-lg ${modalMode === 'edit' ? 'bg-gray-100' : ''}`} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              </div>
+              {modalMode === 'create' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Senha</label>
+                  <input required type="password" minLength={8} className="w-full px-4 py-2 border rounded-lg" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} />
+                </div>
+              )}
+            </>
+          )}
+
+          <div className={`grid ${modalMode === 'batch-edit' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+            {/* Bloco Cargo */}
+            <div className={`border p-3 rounded-lg ${modalMode === 'batch-edit' && !batchToggles.papel ? 'bg-gray-50 border-gray-200' : 'border-gray-300'}`}>
+              {modalMode === 'batch-edit' ? (
+                <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={batchToggles.papel} onChange={e => setBatchToggles({...batchToggles, papel: e.target.checked})} className="rounded text-blue-600 w-4 h-4" />
+                  Sobrescrever Cargo
+                </label>
+              ) : <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>}
+              <select disabled={modalMode === 'batch-edit' && !batchToggles.papel} className="w-full px-4 py-2 border rounded-lg bg-white disabled:bg-gray-100" value={formData.papel} onChange={e => setFormData({...formData, papel: e.target.value})}>
                 <option value="TENANT_ADMIN">Admin</option>
                 <option value="PROFISSIONAL">Profissional</option>
                 <option value="CLIENTE">Cliente</option>
               </select>
             </div>
-            {modalMode === 'create' ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Senha</label>
-                <input required type="password" minLength={8} className="w-full px-4 py-2 border rounded-lg" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} />
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
-                <select className="w-full px-4 py-2 border rounded-lg" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+
+            {/* Bloco Status (Não aparece na criação) */}
+            {modalMode !== 'create' && (
+              <div className={`border p-3 rounded-lg ${modalMode === 'batch-edit' && !batchToggles.status ? 'bg-gray-50 border-gray-200' : 'border-gray-300'}`}>
+                {modalMode === 'batch-edit' ? (
+                  <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={batchToggles.status} onChange={e => setBatchToggles({...batchToggles, status: e.target.checked})} className="rounded text-blue-600 w-4 h-4" />
+                    Sobrescrever Status
+                  </label>
+                ) : <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>}
+                <select disabled={modalMode === 'batch-edit' && !batchToggles.status} className="w-full px-4 py-2 border rounded-lg bg-white disabled:bg-gray-100" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
                   <option value="ATIVO">Ativo</option>
+                  <option value="PENDENTE">Pendente</option>
                   <option value="INATIVO">Inativo</option>
                 </select>
               </div>
             )}
           </div>
+
           <button type="submit" disabled={isSaving} className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg flex justify-center items-center gap-2">
-            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />} 
+            {modalMode === 'create' ? 'Salvar Novo' : modalMode === 'edit' ? 'Salvar Alteração' : 'Aplicar em Lote'}
           </button>
         </form>
       </Modal>
@@ -223,11 +261,7 @@ export default function Users() {
           )}
 
           <button onClick={() => setShowColumnMenu(!showColumnMenu)} className="p-2 border border-gray-200 rounded-lg"><Settings2 className="w-5 h-5 text-gray-600" /></button>
-          
-          {/* BOTÃO DE EXPORTAR CSV */}
-          <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Exportar para CSV">
-            <Download className="w-5 h-5" />
-          </button>
+          <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600"><Download className="w-5 h-5" /></button>
 
           <div className="relative">
             <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
@@ -267,10 +301,6 @@ export default function Users() {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="mt-4 flex justify-between items-center text-xs text-gray-400">
-        <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> <span>API: {apiPing}ms</span></div>
-        <div>Total: {users.length} registros.</div>
       </div>
     </div>
   );
