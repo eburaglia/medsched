@@ -17,13 +17,12 @@ router = APIRouter(
     tags=["Usuários"]
 )
 
-# Instanciamos o verificador de papéis (Apenas ADMINs)
-require_admin = RoleChecker(["ADMIN"])
+# 👇 A CORREÇÃO: Usando o cargo real do banco de dados
+require_tenant_admin = RoleChecker(["TENANT_ADMIN"])
 
 # ---------------------------------------------------------
-# 🛡️ ENDPOINT: BUSCAR PERFIL LOGADO (/me)
+# 🛡 ENDPOINT: BUSCAR PERFIL LOGADO (/me)
 # ---------------------------------------------------------
-# Rota livre para qualquer usuário autenticado ver seu próprio perfil.
 @router.get("/me", response_model=UserResponse)
 def read_user_me(current_user: User = Depends(get_current_user)):
     """
@@ -32,26 +31,20 @@ def read_user_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 # ---------------------------------------------------------
-# ✍ ENDPOINT: CRIAR USUÁRIO (SOMENTE ADMIN)
+# ✍ ENDPOINT: CRIAR USUÁRIO
 # ---------------------------------------------------------
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user_in: UserCreate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin) # 👈 Bloqueado para ADMIN
+    current_user: User = Depends(require_tenant_admin)
 ):
-    """
-    Cria um novo usuário no sistema.
-    Acesso restrito a usuários com papel de ADMIN.
-    """
-    # 1. O Admin só pode criar usuários para a própria clínica dele
     if str(current_user.tenant_id) != str(user_in.tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não pode criar usuários para outra clínica."
         )
 
-    # 2. Verifica se o e-mail já existe
     user_exists = crud_user.get_user_by_email(db, email=user_in.email)
     if user_exists:
         raise HTTPException(
@@ -61,7 +54,7 @@ def create_user(
     return crud_user.create_user(db=db, obj_in=user_in)
 
 # ---------------------------------------------------------
-# 🔍 ENDPOINT: LISTAR USUÁRIOS (SOMENTE ADMIN)
+# 🔍 ENDPOINT: LISTAR USUÁRIOS
 # ---------------------------------------------------------
 @router.get("/", response_model=List[UserResponse])
 def read_users(
@@ -69,12 +62,8 @@ def read_users(
     skip: int = 0, 
     limit: int = 100, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin) # 👈 Bloqueado para ADMIN
+    current_user: User = Depends(require_tenant_admin)
 ):
-    """
-    Retorna a lista de usuários pertencentes a um Tenant específico.
-    Acesso restrito a usuários com papel de ADMIN.
-    """
     if str(current_user.tenant_id) != str(tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -85,19 +74,15 @@ def read_users(
     return users
 
 # ---------------------------------------------------------
-# 🔍 ENDPOINT: BUSCAR UM USUÁRIO ESPECÍFICO (SOMENTE ADMIN)
+# 🔍 ENDPOINT: BUSCAR UM USUÁRIO ESPECÍFICO
 # ---------------------------------------------------------
 @router.get("/{user_id}", response_model=UserResponse)
 def read_user(
     user_id: UUID, 
     tenant_id: UUID, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin) # 👈 Bloqueado para ADMIN
+    current_user: User = Depends(require_tenant_admin)
 ):
-    """
-    Busca os detalhes de um usuário específico.
-    Acesso restrito a usuários com papel de ADMIN.
-    """
     if str(current_user.tenant_id) != str(tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -113,7 +98,7 @@ def read_user(
     return user
 
 # ---------------------------------------------------------
-# 🔄 ENDPOINT: ATUALIZAR USUÁRIO (SOMENTE ADMIN)
+# 🔄 ENDPOINT: ATUALIZAR USUÁRIO
 # ---------------------------------------------------------
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
@@ -121,12 +106,8 @@ def update_user(
     tenant_id: UUID, 
     user_in: UserUpdate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin) # 👈 Bloqueado para ADMIN
+    current_user: User = Depends(require_tenant_admin)
 ):
-    """
-    Atualiza os dados de um usuário existente.
-    Acesso restrito a usuários com papel de ADMIN.
-    """
     if str(current_user.tenant_id) != str(tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

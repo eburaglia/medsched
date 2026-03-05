@@ -15,3 +15,5 @@ from src.models.super_admin import SuperAdmin
 
 # 👇 O nosso motor de ETL e Staging Area!
 from src.models.import_staging import ImportBatch, ImportRow
+from src.models.service_record import ServiceRecord
+from src.models.financial import FinancialTransaction

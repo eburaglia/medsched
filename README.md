@@ -66,6 +66,33 @@ Atualmente, o núcleo do sistema está operacional com suporte a múltiplos inqu
    ```bash
    docker compose up -d --build
 
+# MedSched - Frontend 🎨
+
+Este é o painel de controle da aplicação MedSched, construído para ser rápido, responsivo e moderno.
+
+## 🛠️ Stack Tecnológica
+- **React 19**
+- **Vite 7** (Build tool e servidor de desenvolvimento)
+- **Tailwind CSS v4** (Estilização)
+- **Axios** (Comunicação com a API Rest)
+- **React Router Dom** (Gerenciamento de rotas e navegação)
+- **Lucide React** (Biblioteca de ícones limpos)
+
+## ⚙️ Pré-requisitos
+- **Node.js:** Versão 20.x ou superior (obrigatório para o Vite 7+).
+
+## 🚀 Como rodar localmente
+1. Acesse o diretório:
+   `cd /opt/medsched/frontend`
+2. Instale as dependências:
+   `npm install`
+3. Inicie o servidor em modo de desenvolvimento:
+   `npm run dev`
+
+A aplicação estará acessível na porta **40005** (ex: `http://192.168.x.x:40005`).
+EOF
+
+
 
 Documentação da API (Swagger): http://localhost:40000/docs
 Frontend (React): http://localhost:40001
