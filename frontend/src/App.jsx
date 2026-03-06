@@ -4,7 +4,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Services from './pages/Services';
-import Resources from './pages/Resources'; // NOVO: Importando a tela de Recursos
+import Resources from './pages/Resources';
+import Customers from './pages/Customers';
 
 function App() {
   return (
@@ -16,7 +17,8 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/usuarios" element={<Users />} />
         <Route path="/servicos" element={<Services />} />
-        <Route path="/recursos" element={<Resources />} /> {/* NOVO: Rota do catálogo de recursos */}
+        <Route path="/recursos" element={<Resources />} />
+        <Route path="/clientes" element={<Customers />} /> {/* Rota alterada para /clientes */}
       </Routes>
     </BrowserRouter>
   );

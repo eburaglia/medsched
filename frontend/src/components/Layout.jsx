@@ -56,7 +56,7 @@ export default function Layout({ children }) {
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] },
     { name: 'Agenda', icon: Calendar, path: '/agenda', roles: ['TENANT_ADMIN', 'PROFISSIONAL', 'CLIENTE'] },
-    { name: 'Clientes', icon: UserRound, path: '/pacientes', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] },
+    { name: 'Clientes', icon: UserRound, path: '/clientes', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] }, // Link alterado para /clientes
     { name: 'Usuários', icon: Users, path: '/usuarios', roles: ['TENANT_ADMIN'] },
     { name: 'Serviços', icon: BriefcaseMedical, path: '/servicos', roles: ['TENANT_ADMIN'] },
     { name: 'Recursos', icon: Box, path: '/recursos', roles: ['TENANT_ADMIN'] },
