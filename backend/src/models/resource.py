@@ -17,13 +17,9 @@ class ResourceType(str, enum.Enum):
 class Resource(Base):
     __tablename__ = "resources"
 
-    # Chave Primária
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-
-    # Isolamento Multi-Tenant
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    # Dados Inteligentes do Recurso
     status = Column(Enum(ResourceStatus), default=ResourceStatus.ATIVO, nullable=False)
     nome = Column(String(255), nullable=False, index=True)
     tipo = Column(Enum(ResourceType), nullable=False)
@@ -31,6 +27,10 @@ class Resource(Base):
     requer_aprovacao = Column(Boolean, default=False, nullable=False)
     observacoes = Column(Text, nullable=True)
 
-    # Auditoria explícita (Padrão do nosso banco)
+    # Auditoria Completa
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+    criado_por = Column(String(255), nullable=True)
     alterado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    alterado_por = Column(String(255), nullable=True)
+    deletado_em = Column(DateTime, nullable=True)
+    deletado_por = Column(String(255), nullable=True)
