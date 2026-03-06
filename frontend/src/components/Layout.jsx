@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
-import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical } from 'lucide-react';
 
 export default function Layout({ children }) {
   const [role, setRole] = useState('');
@@ -52,12 +52,14 @@ export default function Layout({ children }) {
     }
   }, []);
 
-  // MATRIZ DE PERMISSÕES DO SISTEMA (Alterado de 'Pacientes' para 'Clientes')
+  // MATRIZ DE PERMISSÕES DO SISTEMA 
+  // (Foi adicionada a rota 'Serviços' para Administradores)
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] },
     { name: 'Agenda', icon: Calendar, path: '/agenda', roles: ['TENANT_ADMIN', 'PROFISSIONAL', 'CLIENTE'] },
     { name: 'Clientes', icon: UserRound, path: '/pacientes', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] },
     { name: 'Usuários', icon: Users, path: '/usuarios', roles: ['TENANT_ADMIN'] },
+    { name: 'Serviços', icon: BriefcaseMedical, path: '/servicos', roles: ['TENANT_ADMIN'] },
     { name: 'Relatórios', icon: FileText, path: '/relatorios', roles: ['TENANT_ADMIN'] },
     { name: 'Configurações', icon: Settings, path: '/configuracoes', roles: ['TENANT_ADMIN'] },
   ];

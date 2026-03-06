@@ -13,13 +13,9 @@ class ServiceStatus(str, enum.Enum):
 class Service(Base):
     __tablename__ = "services"
 
-    # Chave Primária (Substituindo o AuditoriaMixin)
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-
-    # Isolamento Multi-Tenant
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    # Dados do Serviço
     status = Column(Enum(ServiceStatus), default=ServiceStatus.ATIVO, nullable=False)
     nome = Column(String(255), nullable=False, index=True)
     duracao_minutos = Column(Integer, nullable=False)
@@ -27,6 +23,10 @@ class Service(Base):
     imagem_url = Column(String(500), nullable=True)
     observacoes = Column(Text, nullable=True)
 
-    # Auditoria explícita
+    # Auditoria Completa
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+    criado_por = Column(String(255), nullable=True)
     alterado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    alterado_por = Column(String(255), nullable=True)
+    deletado_em = Column(DateTime, nullable=True)
+    deletado_por = Column(String(255), nullable=True)

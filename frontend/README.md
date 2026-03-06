@@ -18,3 +18,4 @@ If you are developing a production application, we recommend using TypeScript wi
 ## 🧩 Componentes Reutilizáveis (Padrão Ouro)
 - **Modal.jsx:** Moldura genérica para formulários e avisos, com suporte a fechamento via ESC e animações Tailwind.
 - **DataGrid (Users.jsx):** Toolbar com busca, seleção em lote, filtros de coluna persistentes por usuário e telemetria de API.
+- **Batch Operations:** Suporte a edição em lote (modificação seletiva de campos) e inativação massiva com feedback em tempo real.
