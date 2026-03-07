@@ -6,6 +6,7 @@ import Users from './pages/Users';
 import Services from './pages/Services';
 import Resources from './pages/Resources';
 import Customers from './pages/Customers';
+import Tenants from './pages/Tenants'; // NOVO
 
 function App() {
   return (
@@ -18,7 +19,8 @@ function App() {
         <Route path="/usuarios" element={<Users />} />
         <Route path="/servicos" element={<Services />} />
         <Route path="/recursos" element={<Resources />} />
-        <Route path="/clientes" element={<Customers />} /> {/* Rota alterada para /clientes */}
+        <Route path="/clientes" element={<Customers />} />
+        <Route path="/tenants" element={<Tenants />} /> {/* Rota de Gestão Global */}
       </Routes>
     </BrowserRouter>
   );

@@ -4,58 +4,55 @@ from datetime import datetime
 from uuid import UUID
 from src.models.tenant import TenantStatus
 
+# 1. Base: Campos comuns a todas as operações
 class TenantBase(BaseModel):
-    nome: str = Field(..., min_length=3, max_length=255)
+    nome: str = Field(..., min_length=3, max_length=255, description="Razão Social da Clínica/Empresa")
     nome_fantasia: Optional[str] = Field(None, max_length=255)
-    cnpj: Optional[str] = Field(None, max_length=20)
+    cnpj: Optional[str] = Field(None, max_length=20, description="CNPJ com ou sem pontuação")
     segmento_atuacao: str = Field(..., max_length=100)
-    fuso_horario: str = Field(..., max_length=50)
+    fuso_horario: str = Field(..., max_length=50, description="Ex: America/Sao_Paulo")
+    
+    # Endereço
     endereco_logradouro: str = Field(..., max_length=255)
     endereco_cidade: str = Field(..., max_length=100)
     endereco_estado: str = Field(..., min_length=2, max_length=2)
     endereco_regiao: str = Field(..., max_length=50)
+    
+    # Contato e Web
     site_url: str = Field(..., max_length=255)
-    email_contato: EmailStr = Field(...)
+    email_contato: EmailStr = Field(..., description="Valida automaticamente se é um email real")
     telefone_contato: str = Field(..., max_length=20)
-    dominio_interno: str = Field(..., max_length=100)
+    
+    dominio_interno: str = Field(..., max_length=100, description="Prefixo para URL única (ex: clinica-vida)")
     url_externa: str = Field(..., max_length=255)
     logotipo_url: str = Field(..., max_length=500)
+    
     observacoes: Optional[str] = None
-    status: Optional[TenantStatus] = Field(default=TenantStatus.PHASE_IN)
 
+# 2. Formulário de Criação (O que o Frontend envia no POST)
 class TenantCreate(TenantBase):
+    # A validade da assinatura é exigida na criação
     validade_assinatura: datetime
 
+# 3. Formulário de Atualização (O que o Frontend envia no PUT/PATCH)
 class TenantUpdate(BaseModel):
-    nome: Optional[str] = Field(None, min_length=3, max_length=255)
+    # Todos os campos são opcionais, pois a clínica pode querer atualizar só o telefone
     nome_fantasia: Optional[str] = Field(None, max_length=255)
-    cnpj: Optional[str] = Field(None, max_length=20)
-    segmento_atuacao: Optional[str] = Field(None, max_length=100)
-    fuso_horario: Optional[str] = Field(None, max_length=50)
-    endereco_logradouro: Optional[str] = Field(None, max_length=255)
-    endereco_cidade: Optional[str] = Field(None, max_length=100)
-    endereco_estado: Optional[str] = Field(None, min_length=2, max_length=2)
-    endereco_regiao: Optional[str] = Field(None, max_length=50)
-    site_url: Optional[str] = Field(None, max_length=255)
-    email_contato: Optional[EmailStr] = None
     telefone_contato: Optional[str] = Field(None, max_length=20)
-    dominio_interno: Optional[str] = Field(None, max_length=100)
-    url_externa: Optional[str] = Field(None, max_length=255)
+    endereco_logradouro: Optional[str] = Field(None, max_length=255)
     logotipo_url: Optional[str] = Field(None, max_length=500)
-    observacoes: Optional[str] = None
     status: Optional[TenantStatus] = None
-    validade_assinatura: Optional[datetime] = None
 
+# 4. Formato de Resposta (O que a API devolve para o Frontend)
 class TenantResponse(TenantBase):
     id: UUID
     codigo_visual: int
+    status: TenantStatus
     validade_assinatura: datetime
     
+    # Campos de Auditoria
     criado_em: datetime
-    criado_por: Optional[UUID] = None
     alterado_em: Optional[datetime] = None
-    alterado_por: Optional[UUID] = None
-    deletado_em: Optional[datetime] = None
-    deletado_por: Optional[UUID] = None
 
+    # Configuração vital: Ensina o Pydantic a ler objetos do SQLAlchemy (Banco de Dados)
     model_config = ConfigDict(from_attributes=True)

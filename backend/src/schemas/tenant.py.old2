@@ -5,7 +5,7 @@ from uuid import UUID
 from src.models.tenant import TenantStatus
 
 class TenantBase(BaseModel):
-    nome: str = Field(..., min_length=3, max_length=255)
+    nome: str = Field(..., min_length=3, max_length=255, description="Razão Social da Clínica/Empresa")
     nome_fantasia: Optional[str] = Field(None, max_length=255)
     cnpj: Optional[str] = Field(None, max_length=20)
     segmento_atuacao: str = Field(..., max_length=100)
@@ -52,10 +52,10 @@ class TenantResponse(TenantBase):
     validade_assinatura: datetime
     
     criado_em: datetime
-    criado_por: Optional[UUID] = None
+    criado_por: Optional[str] = None
     alterado_em: Optional[datetime] = None
-    alterado_por: Optional[UUID] = None
+    alterado_por: Optional[str] = None
     deletado_em: Optional[datetime] = None
-    deletado_por: Optional[UUID] = None
+    deletado_por: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

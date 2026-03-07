@@ -11,7 +11,6 @@ from src.models.user import User
 
 router = APIRouter()
 
-# 🛡️ Trava de Segurança: Apenas Administradores do Sistema Global
 def verify_system_admin(current_user: User):
     if current_user.papel not in ['SYSTEM_ADMIN', 'SUPER_ADMIN']:
         raise HTTPException(
@@ -37,7 +36,6 @@ def create_tenant(
         if db_tenant_dominio:
             raise HTTPException(status_code=400, detail="Este domínio interno já está em uso por outra clínica.")
             
-    # CORREÇÃO AQUI: Enviando o ID (UUID) em vez do nome
     return crud.create_tenant(db=db, tenant=tenant_in, current_user_id=current_user.id)
 
 
@@ -85,7 +83,6 @@ def update_tenant(
         if crud.get_tenant_by_dominio(db, dominio_interno=tenant_in.dominio_interno):
             raise HTTPException(status_code=400, detail="Domínio já em uso.")
 
-    # CORREÇÃO AQUI: Enviando o ID (UUID) em vez do nome
     return crud.update_tenant(db=db, db_tenant=db_tenant, tenant_update=tenant_in, current_user_id=current_user.id)
 
 
@@ -99,7 +96,5 @@ def delete_tenant(
     db_tenant = crud.get_tenant(db, tenant_id=tenant_id)
     if db_tenant is None:
         raise HTTPException(status_code=404, detail="Clínica não encontrada.")
-    
-    # CORREÇÃO AQUI: Enviando o ID (UUID) em vez do nome
     crud.delete_tenant(db=db, db_tenant=db_tenant, current_user_id=current_user.id)
     return None

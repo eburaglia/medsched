@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
-import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2 } from 'lucide-react';
 
 export default function Layout({ children }) {
   const [role, setRole] = useState('');
@@ -15,6 +15,14 @@ export default function Layout({ children }) {
       try {
         const decoded = jwtDecode(token);
         let tokenRole = decoded.papel || decoded.role || '';
+
+        // Se for SUPER_ADMIN, não tenta buscar na tabela de usuários
+        if (tokenRole === 'SUPER_ADMIN') {
+           setUserName('Super Admin');
+           setRole('SUPER_ADMIN');
+           setThemeColor('#1e1e1e'); // Cor fixa global para o Super Admin
+           return;
+        }
 
         if (decoded.sub) {
           api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } })
@@ -54,14 +62,16 @@ export default function Layout({ children }) {
 
   // MATRIZ DE PERMISSÕES DO SISTEMA 
   const menuItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] },
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['TENANT_ADMIN', 'PROFISSIONAL', 'SUPER_ADMIN'] },
     { name: 'Agenda', icon: Calendar, path: '/agenda', roles: ['TENANT_ADMIN', 'PROFISSIONAL', 'CLIENTE'] },
-    { name: 'Clientes', icon: UserRound, path: '/clientes', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] }, // Link alterado para /clientes
+    { name: 'Clientes', icon: UserRound, path: '/clientes', roles: ['TENANT_ADMIN', 'PROFISSIONAL'] },
     { name: 'Usuários', icon: Users, path: '/usuarios', roles: ['TENANT_ADMIN'] },
     { name: 'Serviços', icon: BriefcaseMedical, path: '/servicos', roles: ['TENANT_ADMIN'] },
     { name: 'Recursos', icon: Box, path: '/recursos', roles: ['TENANT_ADMIN'] },
-    { name: 'Relatórios', icon: FileText, path: '/relatorios', roles: ['TENANT_ADMIN'] },
+    { name: 'Relatórios', icon: FileText, path: '/relatorios', roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
     { name: 'Configurações', icon: Settings, path: '/configuracoes', roles: ['TENANT_ADMIN'] },
+    // ROTA EXCLUSIVA PARA O DONO DO SISTEMA
+    { name: 'Gestão de Clínicas', icon: Building2, path: '/tenants', roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
   ];
 
   const allowedMenus = menuItems.filter(item => item.roles.includes(role));
