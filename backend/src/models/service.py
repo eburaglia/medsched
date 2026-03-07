@@ -1,14 +1,23 @@
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Numeric, Text, Enum, ForeignKey, DateTime
+from sqlalchemy import Column, String, Integer, Numeric, Text, Enum, ForeignKey, DateTime, Table
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from src.database import Base
 
 class ServiceStatus(str, enum.Enum):
     ATIVO = "ativo"
     INATIVO = "inativo"
+
+# A TABELA PONTE (Associação Muitos-Para-Muitos)
+service_resources = Table(
+    "service_resources",
+    Base.metadata,
+    Column("service_id", UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), primary_key=True),
+    Column("resource_id", UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True)
+)
 
 class Service(Base):
     __tablename__ = "services"
@@ -30,3 +39,6 @@ class Service(Base):
     alterado_por = Column(String(255), nullable=True)
     deletado_em = Column(DateTime, nullable=True)
     deletado_por = Column(String(255), nullable=True)
+
+    # O RELACIONAMENTO MÁGICO
+    resources = relationship("Resource", secondary=service_resources, backref="services")

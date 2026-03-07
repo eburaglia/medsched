@@ -5,14 +5,13 @@ import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
-  Plus, Loader2, AlertCircle, Search, Download, Edit2, Trash2, 
-  Settings2, Clock, Save, Filter, X, Layers, Activity, 
-  ChevronLeft, ChevronRight, Info, Ban, Box
+  Plus, Shield, UserCheck, Loader2, AlertCircle, 
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, Filter, X, Layers, Activity, ChevronLeft, ChevronRight, Info, FileSpreadsheet,
+  Ban
 } from 'lucide-react';
 
 export default function Services() {
   const [services, setServices] = useState([]);
-  const [resources, setResources] = useState([]); // NOVO: Estado para armazenar os recursos do Tenant
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -22,6 +21,7 @@ export default function Services() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedServices, setSelectedServices] = useState([]);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
   
   const [showFilters, setShowFilters] = useState(false);
   const [queryBuilder, setQueryBuilder] = useState({ rootLogic: 'AND', groups: [] });
@@ -33,17 +33,14 @@ export default function Services() {
   const [batchToggles, setBatchToggles] = useState({ status: false, duracao_minutos: false, preco: false });
 
   const [formData, setFormData] = useState({ 
-    nome: '', duracao_minutos: 30, preco: '', observacoes: '', status: 'ativo', tenant_id: '',
-    resource_ids: [] // NOVO: Lista de IDs dos recursos vinculados
+    nome: '', duracao_minutos: 30, preco: '', observacoes: '', status: 'ativo', tenant_id: ''
   });
 
   const [editingAuditData, setEditingAuditData] = useState(null);
 
   const [visibleColumns, setVisibleColumns] = useState({ 
     id: false,
-    nome: true, duracao_minutos: true, preco: true, 
-    recursos: true, // NOVA COLUNA
-    status: true, 
+    nome: true, duracao_minutos: true, preco: true, status: true, 
     observacoes: false,
     criado_em: false, criado_por: false, 
     alterado_em: false, alterado_por: false,
@@ -53,27 +50,18 @@ export default function Services() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchData = async () => {
+  const fetchServices = async () => {
     const startTime = performance.now();
     try {
       const token = localStorage.getItem('medsched_token');
       if (!token) return;
       const decoded = jwtDecode(token);
-      const tenantId = decoded.tenant_id;
       
-      // NOVO: Busca Paralela de Serviços e Recursos
-      const [servicesRes, resourcesRes] = await Promise.all([
-          api.get('/services/', { params: { tenant_id: tenantId } }),
-          api.get('/resources/', { params: { tenant_id: tenantId } })
-      ]);
-      
+      const response = await api.get('/services/', { params: { tenant_id: decoded.tenant_id } });
       const endTime = performance.now(); 
       
-      setServices(servicesRes.data);
-      // Filtra apenas os recursos ativos para exibir na lista do Modal
-      setResources(resourcesRes.data.filter(r => r.status === 'ativo'));
-      
-      if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: tenantId }));
+      setServices(response.data);
+      if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
       
       requestAnimationFrame(() => {
         const renderTime = performance.now();
@@ -83,19 +71,22 @@ export default function Services() {
         const browserEstimate = Math.round(renderTime - endTime);
         
         setPerfMetrics({
-          server: serverEstimate, network: networkEstimate, browser: browserEstimate,
-          api: apiTotal, total: apiTotal + browserEstimate
+          server: serverEstimate,
+          network: networkEstimate,
+          browser: browserEstimate,
+          api: apiTotal,
+          total: apiTotal + browserEstimate
         });
       });
 
     } catch (err) {
-      setError("Falha ao carregar dados.");
+      setError("Falha ao carregar serviços.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchServices(); }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -117,12 +108,11 @@ export default function Services() {
         const checkRule = (r) => {
           if (!r.column || !r.operator || r.value === '') return true;
 
+          // NOVA LÓGICA: Separando campos numéricos dos campos de texto
           const isNumeric = ['duracao_minutos', 'preco'].includes(r.column);
-          // Tratamento para a nova coluna virtual
-          const valToCompare = r.column === 'recursos' ? (s.resources ? s.resources.length : 0) : s[r.column];
 
-          if (isNumeric || r.column === 'recursos') {
-            const userValue = Number(valToCompare) || 0;
+          if (isNumeric) {
+            const userValue = Number(s[r.column]) || 0;
             const filterValue = Number(r.value) || 0;
             switch (r.operator) {
               case 'equals': return userValue === filterValue;
@@ -134,7 +124,7 @@ export default function Services() {
               default: return true;
             }
           } else {
-            const userValue = String(valToCompare || '').toLowerCase();
+            const userValue = String(s[r.column] || '').toLowerCase();
             const filterValue = String(r.value).toLowerCase();
             switch (r.operator) {
               case 'contains': return userValue.includes(filterValue);
@@ -172,6 +162,7 @@ export default function Services() {
     return { ...prev, groups: newGroups.filter(g => g.rules.length > 0) }; 
   });
   
+  // Função atualizada para trocar de coluna resetando o operador se o tipo do campo mudar
   const updateRuleColumn = (groupId, ruleId, newCol) => {
     setQueryBuilder(prev => ({
       ...prev,
@@ -181,8 +172,9 @@ export default function Services() {
             ...g,
             rules: g.rules.map(r => {
               if (r.id === ruleId) {
-                const wasNumeric = ['duracao_minutos', 'preco', 'recursos'].includes(r.column);
-                const isNowNumeric = ['duracao_minutos', 'preco', 'recursos'].includes(newCol);
+                const wasNumeric = ['duracao_minutos', 'preco'].includes(r.column);
+                const isNowNumeric = ['duracao_minutos', 'preco'].includes(newCol);
+                // Se mudou de texto pra número ou vice-versa, reseta o operador e o valor
                 if (wasNumeric !== isNowNumeric) {
                   return { ...r, column: newCol, operator: 'equals', value: '' };
                 }
@@ -206,19 +198,20 @@ export default function Services() {
     const headers = Object.keys(visibleColumns).filter(key => visibleColumns[key]);
     const csvRows = [headers.join(',')];
     for (const row of dataToExport) {
-      const values = headers.map(header => {
-          if (header === 'recursos') {
-              const resList = row.resources ? row.resources.map(r => r.nome).join('; ') : '';
-              return `"${resList}"`;
-          }
-          return `"${String(row[header] || '').replace(/"/g, '""')}"`;
-      });
+      const values = headers.map(header => `"${String(row[header] || '').replace(/"/g, '""')}"`);
       csvRows.push(values.join(','));
     }
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `medsched_servicos.csv`;
+    const now = new Date();
+    const ano = now.getFullYear();
+    const mes = String(now.getMonth() + 1).padStart(2, '0');
+    const dia = String(now.getDate()).padStart(2, '0');
+    const hora = String(now.getHours()).padStart(2, '0');
+    const minuto = String(now.getMinutes()).padStart(2, '0');
+    const segundo = String(now.getSeconds()).padStart(2, '0');
+    link.download = `medsched_servicos_${ano}${mes}${dia}_${hora}${minuto}${segundo}.csv`;
     link.click();
     toast.success(`${dataToExport.length} registros exportados!`);
   };
@@ -234,17 +227,17 @@ export default function Services() {
       }
       toast.success("Operação concluída.", { id: loadingToast });
       setSelectedServices([]);
-      fetchData();
+      fetchServices();
     } catch (err) { toast.error("Erro na inativação.", { id: loadingToast }); }
   };
 
   const handleOpenCreate = () => { 
+    setShowAddMenu(false); 
     setModalMode('create'); 
     setEditingAuditData(null);
     setFormData({ 
       nome: '', duracao_minutos: 30, preco: '', observacoes: '', status: 'ativo', 
-      tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id,
-      resource_ids: []
+      tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
     }); 
     setIsModalOpen(true); 
   };
@@ -258,8 +251,7 @@ export default function Services() {
         preco: serviceToEdit.preco || '', 
         observacoes: serviceToEdit.observacoes || '', 
         status: serviceToEdit.status || 'ativo', 
-        tenant_id: serviceToEdit.tenant_id,
-        resource_ids: serviceToEdit.resources ? serviceToEdit.resources.map(r => r.id) : [] // Extrai IDs
+        tenant_id: serviceToEdit.tenant_id 
       });
       setEditingAuditData({
         id: serviceToEdit.id,
@@ -271,20 +263,10 @@ export default function Services() {
     } else if (selectedServices.length > 1) {
       setModalMode('batch-edit'); setBatchToggles({ status: false, duracao_minutos: false, preco: false }); 
       setFormData({ 
-        nome: '', duracao_minutos: 30, preco: '', observacoes: '', status: 'ativo', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id, resource_ids: [] 
+        nome: '', duracao_minutos: 30, preco: '', observacoes: '', status: 'ativo', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
       }); 
       setIsModalOpen(true);
     }
-  };
-
-  // Funções Auxiliares para os Chips de Recursos
-  const addResource = (resourceId) => {
-    if (resourceId && !formData.resource_ids.includes(resourceId)) {
-        setFormData(prev => ({ ...prev, resource_ids: [...prev.resource_ids, resourceId] }));
-    }
-  };
-  const removeResource = (resourceId) => {
-    setFormData(prev => ({ ...prev, resource_ids: prev.resource_ids.filter(id => id !== resourceId) }));
   };
 
   const handleSaveService = async (e) => {
@@ -292,10 +274,12 @@ export default function Services() {
     try {
       const payload = { ...formData };
       
+      // Tratamentos numéricos
       if (payload.preco === '') payload.preco = null;
       else if (payload.preco !== null) payload.preco = parseFloat(payload.preco.toString().replace(',', '.'));
       if (payload.duracao_minutos) payload.duracao_minutos = parseInt(payload.duracao_minutos, 10);
       
+      // Sanitização (burlar Pydantic validator em campos em branco)
       Object.keys(payload).forEach(key => {
         if (payload[key] === '' && key !== 'preco') {
           payload[key] = null;
@@ -323,7 +307,7 @@ export default function Services() {
         for (const serviceId of selectedServices) { await api.put(`/services/${serviceId}`, batchPayload, { params: { tenant_id: formData.tenant_id } }); }
         toast.success("Edição em lote concluída!", { id: loadingToast }); setSelectedServices([]);
       }
-      setIsModalOpen(false); fetchData(); 
+      setIsModalOpen(false); fetchServices(); 
     } catch (err) { 
       const errorMsg = err.response?.data?.detail || "Erro ao salvar. Verifique os dados.";
       toast.error(typeof errorMsg === 'string' ? errorMsg : "Erro de formatação nos campos"); 
@@ -359,43 +343,6 @@ export default function Services() {
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Duração (minutos)</label><input required type="number" min="1" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.duracao_minutos} onChange={e => setFormData({...formData, duracao_minutos: e.target.value})} /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Preço Base (R$)</label><input type="number" step="0.01" min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" value={formData.preco} onChange={e => setFormData({...formData, preco: e.target.value})} /></div>
                   <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Observações Internas</label><textarea rows={2} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Instruções e anotações..." value={formData.observacoes} onChange={e => setFormData({...formData, observacoes: e.target.value})} /></div>
-                </div>
-              </fieldset>
-            )}
-
-            {/* NOVO SETOR: SELEÇÃO DE RECURSOS VINCULADOS */}
-            {modalMode !== 'batch-edit' && (
-              <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
-                <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider flex items-center gap-2"><Box className="w-4 h-4 text-blue-600" /> Recursos Vinculados</legend>
-                <div className="mt-2 space-y-3">
-                    <p className="text-xs text-gray-500">Quais salas ou equipamentos este serviço exige para acontecer?</p>
-                    
-                    <select 
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
-                        onChange={e => { addResource(e.target.value); e.target.value = ""; }}
-                    >
-                        <option value="">Selecione um recurso para adicionar...</option>
-                        {resources
-                            .filter(r => !formData.resource_ids.includes(r.id))
-                            .map(r => <option key={r.id} value={r.id}>{r.nome} ({r.tipo === 'fisico' ? 'Sala/Equip' : 'Online'})</option>)
-                        }
-                    </select>
-
-                    {/* Exibição dos Chips Selecionados */}
-                    {formData.resource_ids.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-2">
-                            {formData.resource_ids.map(id => {
-                                const res = resources.find(r => r.id === id);
-                                if (!res) return null;
-                                return (
-                                    <div key={id} className="flex items-center gap-1.5 bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full text-xs font-bold border border-blue-200 shadow-sm">
-                                        <Box className="w-3 h-3 opacity-70" /> {res.nome}
-                                        <button type="button" onClick={() => removeResource(id)} className="ml-1 hover:text-red-500 transition-colors"><X className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
                 </div>
               </fieldset>
             )}
@@ -447,7 +394,7 @@ export default function Services() {
 
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Catálogo de Serviços</h1>
-          <p className="text-gray-500 mt-1">Gestão de procedimentos, durações, valores e recursos vinculados.</p>
+          <p className="text-gray-500 mt-1">Gestão de procedimentos, durações e valores.</p>
         </div>
 
         <div className="flex flex-col">
@@ -526,7 +473,8 @@ export default function Services() {
 
                     <div className="space-y-2 pl-2 border-l-2 border-blue-200">
                       {group.rules.map((rule, ruleIndex) => {
-                        const isNumericCol = ['duracao_minutos', 'preco', 'recursos'].includes(rule.column);
+                        // Verifica se a coluna atual é numérica para renderizar os campos certos
+                        const isNumericCol = ['duracao_minutos', 'preco'].includes(rule.column);
                         
                         return (
                           <div key={rule.id} className="flex gap-3 items-center">
@@ -599,25 +547,6 @@ export default function Services() {
                       {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{service.nome}</td>}
                       {visibleColumns.duracao_minutos && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{service.duracao_minutos} min</td>}
                       {visibleColumns.preco && <td className="px-6 py-4 text-gray-600 whitespace-nowrap font-medium">{formatMoney(service.preco)}</td>}
-                      
-                      {/* NOVA COLUNA VISUAL: RECURSOS */}
-                      {visibleColumns.recursos && (
-                        <td className="px-6 py-4">
-                           {service.resources && service.resources.length > 0 ? (
-                               <div className="flex flex-wrap gap-1">
-                                   {service.resources.slice(0, 2).map(r => (
-                                       <span key={r.id} className="text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full">{r.nome}</span>
-                                   ))}
-                                   {service.resources.length > 2 && (
-                                       <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">+{service.resources.length - 2}</span>
-                                   )}
-                               </div>
-                           ) : (
-                               <span className="text-gray-400 text-sm italic">- Não exige -</span>
-                           )}
-                        </td>
-                      )}
-
                       {visibleColumns.status && (
                         <td className="px-6 py-4">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm border ${service.status === 'ativo' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
@@ -627,6 +556,7 @@ export default function Services() {
                       )}
                       
                       {visibleColumns.observacoes && <td className="px-6 py-4 text-gray-600 truncate max-w-xs">{service.observacoes || '-'}</td>}
+                      
                       {visibleColumns.criado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(service.criado_em)}</td>}
                       {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{service.criado_por || '-'}</td>}
                       {visibleColumns.alterado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(service.alterado_em)}</td>}
