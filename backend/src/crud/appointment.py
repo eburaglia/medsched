@@ -15,9 +15,10 @@ from src.schemas.appointment import (
 )
 
 def create_appointment(db: Session, obj_in: AppointmentCreate, current_user_id: uuid.UUID) -> Appointment:
-    db_obj = Appointment(**obj_in.model_dump())
+    db_obj = Appointment(**obj_in.model_dump(exclude_unset=True))
     db_obj.criado_por = current_user_id
     db_obj.alterado_por = current_user_id
+    db_obj.alterado_em = datetime.utcnow() # Blindagem da Data
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
@@ -49,6 +50,7 @@ def update_appointment(db: Session, db_appointment: Appointment, obj_in: Appoint
         setattr(db_appointment, field, value)
         
     db_appointment.alterado_por = current_user_id
+    db_appointment.alterado_em = datetime.utcnow() # Blindagem da Data
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
@@ -93,7 +95,7 @@ def gerar_projecao_recorrencia(db: Session, regra: RecorrenciaRegraInput) -> Lis
             data_hora_inicio=current_start,
             data_hora_fim=current_end,
             disponivel=disponivel,
-            conflito_detalhe="Horário ocupado pelo profissional." if not disponivel else None
+            conflito_detalhe="Horário ocupado." if not disponivel else None
         )
         projecao.append(item)
         if regra.frequencia == FrequenciaRecorrencia.DIARIA:
@@ -114,11 +116,17 @@ def gerar_projecao_recorrencia(db: Session, regra: RecorrenciaRegraInput) -> Lis
 def create_agendamentos_em_lote(db: Session, batch_in: RecorrenciaCreateBatch, current_user_id: uuid.UUID) -> List[Appointment]:
     grupo_id = uuid.uuid4()
     db_objs = []
+    now = datetime.utcnow()
     for agendamento_in in batch_in.agendamentos:
-        db_obj = Appointment(**agendamento_in.model_dump())
+        db_obj = Appointment(**agendamento_in.model_dump(exclude_unset=True))
         db_obj.grupo_recorrencia_id = grupo_id
         db_obj.criado_por = current_user_id
         db_obj.alterado_por = current_user_id
+        
+        # CORREÇÃO AQUI: Forçando a data de alteração no Python para o Banco não recusar
+        db_obj.criado_em = now
+        db_obj.alterado_em = now
+        
         db.add(db_obj)
         db_objs.append(db_obj)
     db.commit()
