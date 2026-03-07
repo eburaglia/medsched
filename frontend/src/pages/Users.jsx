@@ -377,7 +377,7 @@ export default function Users() {
 
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Usuários</h1>
-          <p className="text-gray-500 mt-1">Gestão de acessos e perfis da clínica.</p>
+          <p className="text-gray-500 mt-1">Gestão de Usuários e Acessos.</p>
         </div>
 
         <div className="flex flex-col">

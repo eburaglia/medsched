@@ -426,7 +426,7 @@ export default function Customers() {
 
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Catálogo de Clientes</h1>
-          <p className="text-gray-500 mt-1">Gestão de pacientes e histórico cadastral.</p>
+          <p className="text-gray-500 mt-1">Gestão de Clientes e histórico cadastral.</p>
         </div>
 
         <div className="flex flex-col">

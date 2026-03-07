@@ -6,7 +6,8 @@ import Users from './pages/Users';
 import Services from './pages/Services';
 import Resources from './pages/Resources';
 import Customers from './pages/Customers';
-import Tenants from './pages/Tenants'; // NOVO
+import Tenants from './pages/Tenants';
+import Agenda from './pages/Agenda'; // NOVO: Importando a Agenda
 
 function App() {
   return (
@@ -16,11 +17,12 @@ function App() {
         <Route path="/login" element={<Login />} />
         
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/agenda" element={<Agenda />} /> {/* NOVO: Rota da Agenda */}
         <Route path="/usuarios" element={<Users />} />
         <Route path="/servicos" element={<Services />} />
         <Route path="/recursos" element={<Resources />} />
         <Route path="/clientes" element={<Customers />} />
-        <Route path="/tenants" element={<Tenants />} /> {/* Rota de Gestão Global */}
+        <Route path="/tenants" element={<Tenants />} />
       </Routes>
     </BrowserRouter>
   );

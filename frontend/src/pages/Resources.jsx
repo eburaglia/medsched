@@ -560,7 +560,7 @@ export default function Resources() {
                       {visibleColumns.id && <td className="px-6 py-4 text-gray-400 font-mono text-xs">{res.id}</td>}
                       {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{res.nome}</td>}
                       {visibleColumns.tipo && <td className="px-6 py-4 text-gray-600 font-medium uppercase text-xs">{res.tipo}</td>}
-                      {visibleColumns.capacidade_maxima && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{res.capacidade_maxima} pax</td>}
+                      {visibleColumns.capacidade_maxima && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{res.capacidade_maxima} </td>}
                       {visibleColumns.requer_aprovacao && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{res.requer_aprovacao ? <span className="text-orange-600 font-bold">Sim</span> : 'Não'}</td>}
                       {visibleColumns.status && (
                         <td className="px-6 py-4">
