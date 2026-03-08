@@ -5,22 +5,42 @@ from sqlalchemy.orm import relationship
 from src.database import Base
 from src.models.base import AuditoriaMixin
 
+# ---------------------------------------------------------
+# 1. Status: Conforme o Padrão do seu Banco (MAIÚSCULO)
+# ---------------------------------------------------------
 class UserStatus(str, enum.Enum):
     PENDENTE = "PENDENTE"
     ATIVO = "ATIVO"
     INATIVO = "INATIVO"
 
+# ---------------------------------------------------------
+# 2. Papéis: Conforme a Lista Real do seu PostgreSQL
+# ---------------------------------------------------------
 class UserRole(str, enum.Enum):
     TENANT_ADMIN = "TENANT_ADMIN"
-    PROFISSIONAL = "PROFISSIONAL"
+    PROFISSIONAL = "PROFISSIONAL"  # Use este para Médicos/Prestadores
     CLIENTE = "CLIENTE"
 
 class User(AuditoriaMixin, Base):
     __tablename__ = "users"
 
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(Enum(UserStatus, values_callable=lambda obj: [e.value for e in obj]), default=UserStatus.PENDENTE, nullable=False)
-    papel = Column(Enum(UserRole, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    tenant_id = Column(
+        UUID(as_uuid=True), 
+        ForeignKey("tenants.id", ondelete="CASCADE"), 
+        nullable=False, 
+        index=True
+    )
+
+    # Enviando sempre o .value para garantir compatibilidade
+    status = Column(
+        Enum(UserStatus, values_callable=lambda obj: [e.value for e in obj]), 
+        default=UserStatus.PENDENTE, 
+        nullable=False
+    )
+    papel = Column(
+        Enum(UserRole, values_callable=lambda obj: [e.value for e in obj]), 
+        nullable=False
+    )
 
     nome = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
@@ -29,11 +49,7 @@ class User(AuditoriaMixin, Base):
     telefone_contato = Column(String(20), nullable=True)
     observacoes = Column(Text, nullable=True)
 
-    # Campos de Endereço (Novos ou Restaurados)
-    endereco_cep = Column(String(20), nullable=True)
     endereco_logradouro = Column(String(255), nullable=True)
-    endereco_numero = Column(String(50), nullable=True)
-    endereco_bairro = Column(String(255), nullable=True)
     endereco_cidade = Column(String(100), nullable=True)
     endereco_estado = Column(String(2), nullable=True)
     endereco_regiao = Column(String(50), nullable=True)
