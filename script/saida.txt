@@ -1,0 +1,346 @@
+====================================================
+=========                      Iniciando Export do arquivo user.py ===============
+====================================================
+    ARQUIVO MODELS/USER.PY
+====================================================
+import enum
+from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from src.database import Base
+from src.models.base import AuditoriaMixin
+
+# ---------------------------------------------------------
+# 1. Status: Conforme o Padrão do seu Banco (MAIÚSCULO)
+# ---------------------------------------------------------
+class UserStatus(str, enum.Enum):
+    PENDENTE = "PENDENTE"
+    ATIVO = "ATIVO"
+    INATIVO = "INATIVO"
+
+# ---------------------------------------------------------
+# 2. Papéis: Conforme a Lista Real do seu PostgreSQL
+# ---------------------------------------------------------
+class UserRole(str, enum.Enum):
+    TENANT_ADMIN = "TENANT_ADMIN"
+    PROFISSIONAL = "PROFISSIONAL"  # Use este para Médicos/Prestadores
+    CLIENTE = "CLIENTE"
+
+class User(AuditoriaMixin, Base):
+    __tablename__ = "users"
+
+    tenant_id = Column(
+        UUID(as_uuid=True), 
+        ForeignKey("tenants.id", ondelete="CASCADE"), 
+        nullable=False, 
+        index=True
+    )
+
+    # Enviando sempre o .value para garantir compatibilidade
+    status = Column(
+        Enum(UserStatus, values_callable=lambda obj: [e.value for e in obj]), 
+        default=UserStatus.PENDENTE, 
+        nullable=False
+    )
+    papel = Column(
+        Enum(UserRole, values_callable=lambda obj: [e.value for e in obj]), 
+        nullable=False
+    )
+
+    nome = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    cpf = Column(String(20), nullable=True, unique=True, index=True)
+    telefone = Column(String(20), nullable=True)
+    telefone_contato = Column(String(20), nullable=True)
+    observacoes = Column(Text, nullable=True)
+
+    endereco_logradouro = Column(String(255), nullable=True)
+    endereco_cidade = Column(String(100), nullable=True)
+    endereco_estado = Column(String(2), nullable=True)
+    endereco_regiao = Column(String(50), nullable=True)
+
+    senha_hash = Column(String(255), nullable=False)
+    recuperacao_token = Column(String(100), nullable=True, index=True)
+    recuperacao_expira = Column(DateTime, nullable=True)
+
+    tenant = relationship("Tenant", backref="users")
+====================================================
+    ARQUIVO SCHEMAS/USER.PY
+====================================================
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing import Optional
+from datetime import datetime
+from uuid import UUID
+
+from src.models.user import UserRole, UserStatus
+
+# 1. Base: Campos comuns a todas as operações
+class UserBase(BaseModel):
+    nome: str = Field(..., min_length=3, max_length=255, description="Nome completo do usuário")
+    email: EmailStr = Field(..., description="E-mail único para login")
+    telefone: Optional[str] = Field(None, max_length=20)
+    telefone_contato: Optional[str] = Field(None, max_length=20, description="Telefone secundário/contato")
+    cpf: Optional[str] = Field(None, max_length=20, description="CPF do usuário")
+    observacoes: Optional[str] = Field(None, description="Observações gerais sobre o usuário")
+    
+    # Endereço (Restaurado)
+    endereco_logradouro: Optional[str] = Field(None, max_length=255)
+    endereco_cidade: Optional[str] = Field(None, max_length=100)
+    endereco_estado: Optional[str] = Field(None, min_length=2, max_length=2)
+    endereco_regiao: Optional[str] = Field(None, max_length=50)
+    
+    papel: UserRole = Field(..., description="Nível de permissão no sistema")
+    status: UserStatus = Field(default=UserStatus.PENDENTE, description="Estado atual da conta")
+    
+    # Isolamento Multi-Tenant
+    tenant_id: UUID = Field(..., description="ID da clínica a qual este usuário pertence")
+
+# 2. Formulário de Criação
+class UserCreate(UserBase):
+    senha: str = Field(..., min_length=8, description="Senha forte para acesso")
+
+# 3. Formulário de Atualização
+class UserUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=3, max_length=255)
+    telefone: Optional[str] = Field(None, max_length=20)
+    telefone_contato: Optional[str] = Field(None, max_length=20)
+    observacoes: Optional[str] = None
+    status: Optional[UserStatus] = None
+    papel: Optional[UserRole] = None
+    
+    endereco_logradouro: Optional[str] = Field(None, max_length=255)
+    endereco_cidade: Optional[str] = Field(None, max_length=100)
+    endereco_estado: Optional[str] = Field(None, min_length=2, max_length=2)
+    endereco_regiao: Optional[str] = Field(None, max_length=50)
+
+# 4. Formato de Resposta
+class UserResponse(UserBase):
+    id: UUID
+    criado_em: datetime
+    alterado_em: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+====================================================
+    ARQUIVO CRUD/USER.PY
+====================================================
+from sqlalchemy.orm import Session
+from uuid import UUID
+from typing import List, Optional
+from src.core.security import get_password_hash
+from src.models.user import User
+from src.schemas.user import UserCreate, UserUpdate
+
+# ---------------------------------------------------------
+# 🛡️ IMPORTANTE: Módulo de Segurança
+# Assumimos que você terá uma função para gerar o hash da senha.
+# Caso ainda não tenha o arquivo security.py, usaremos um placeholder.
+# from src.core.security import get_password_hash
+# ---------------------------------------------------------
+def mock_password_hash(password: str) -> str:
+    """Função temporária até criarmos o módulo de segurança real"""
+    return f"hashed_{password}_123xyz"
+
+
+# ---------------------------------------------------------
+# 🔍 LEITURA (READ) - Sempre isolado por Tenant!
+# ---------------------------------------------------------
+def get_user_by_id(db: Session, user_id: UUID, tenant_id: UUID) -> Optional[User]:
+    """Busca um usuário garantindo que ele pertence ao Tenant atual"""
+    return db.query(User).filter(User.id == user_id, User.tenant_id == tenant_id).first()
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    """
+    Busca por e-mail (Global). 
+    Útil para o momento do Login, onde ainda não sabemos o tenant do usuário.
+    """
+    return db.query(User).filter(User.email == email).first()
+
+def get_users_by_tenant(db: Session, tenant_id: UUID, skip: int = 0, limit: int = 100) -> List[User]:
+    """Lista todos os usuários de uma clínica específica (Paginação básica)"""
+    return db.query(User).filter(User.tenant_id == tenant_id).offset(skip).limit(limit).all()
+
+
+# ---------------------------------------------------------
+# ✍️ CRIAÇÃO (CREATE)
+# ---------------------------------------------------------
+def create_user(db: Session, obj_in: UserCreate) -> User:
+    """Cria um novo usuário aplicando hash na senha"""
+    # 1. Extraímos os dados validados pelo Pydantic, ignorando a senha em texto plano
+    obj_data = obj_in.model_dump(exclude={"senha"})
+    
+    # 2. Geramos o hash de segurança (Substituir pela função real depois)
+    #senha_criptografada = mock_password_hash(obj_in.senha) - linha descontinuada
+    senha_criptografada = get_password_hash(obj_in.senha)
+    obj_data["senha_hash"] = senha_criptografada
+    
+    # 3. Criamos a instância do modelo e salvamos no banco
+    db_user = User(**obj_data)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    return db_user
+
+
+# ---------------------------------------------------------
+# 🔄 ATUALIZAÇÃO (UPDATE)
+# ---------------------------------------------------------
+def update_user(db: Session, db_user: User, obj_in: UserUpdate) -> User:
+    """Atualiza apenas os campos permitidos e fornecidos na requisição"""
+    # Transformamos os dados que chegaram em um dicionário, excluindo campos nulos
+    update_data = obj_in.model_dump(exclude_unset=True)
+    
+    # Aplicamos as mudanças no objeto do banco de dados
+    for field, value in update_data.items():
+        setattr(db_user, field, value)
+        
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    return db_user
+
+
+# ---------------------------------------------------------
+# ❌ EXCLUSÃO (DELETE) / INATIVAÇÃO
+# ---------------------------------------------------------
+# Nota do Arquiteto: Geralmente, não deletamos usuários fisicamente (Soft Delete).
+# Em vez disso, mudamos o status para INATIVO. Mas deixo a função de exclusão real aqui caso seja o requisito.
+def delete_user(db: Session, user_id: UUID, tenant_id: UUID) -> bool:
+    """Remove um usuário fisicamente, garantindo isolamento de tenant"""
+    db_user = get_user_by_id(db=db, user_id=user_id, tenant_id=tenant_id)
+    if not db_user:
+        return False
+        
+    db.delete(db_user)
+    db.commit()
+    return True
+====================================================
+    ARQUIVO API/V1/ENDPOINTS/USER.PY
+====================================================
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+from uuid import UUID
+
+from src.database import get_db
+from src.schemas.user import UserCreate, UserUpdate, UserResponse
+from src.crud import user as crud_user
+from src.api.deps import get_current_user, RoleChecker
+from src.models.user import User
+
+# ---------------------------------------------------------
+# 🚦 CONFIGURAÇÃO DO ROTEADOR E SEGURANÇA
+# ---------------------------------------------------------
+router = APIRouter(
+    prefix="/users",
+    tags=["Usuários"]
+)
+
+# 👇 A CORREÇÃO: Usando o cargo real do banco de dados
+require_tenant_admin = RoleChecker(["TENANT_ADMIN"])
+
+# ---------------------------------------------------------
+# 🛡 ENDPOINT: BUSCAR PERFIL LOGADO (/me)
+# ---------------------------------------------------------
+@router.get("/me", response_model=UserResponse)
+def read_user_me(current_user: User = Depends(get_current_user)):
+    """
+    Retorna os dados do próprio usuário autenticado.
+    """
+    return current_user
+
+# ---------------------------------------------------------
+# ✍ ENDPOINT: CRIAR USUÁRIO
+# ---------------------------------------------------------
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def create_user(
+    user_in: UserCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_admin)
+):
+    if str(current_user.tenant_id) != str(user_in.tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não pode criar usuários para outra clínica."
+        )
+
+    user_exists = crud_user.get_user_by_email(db, email=user_in.email)
+    if user_exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este e-mail já está cadastrado no sistema."
+        )
+    return crud_user.create_user(db=db, obj_in=user_in)
+
+# ---------------------------------------------------------
+# 🔍 ENDPOINT: LISTAR USUÁRIOS
+# ---------------------------------------------------------
+@router.get("/", response_model=List[UserResponse])
+def read_users(
+    tenant_id: UUID, 
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_admin)
+):
+    if str(current_user.tenant_id) != str(tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para listar dados de outra clínica."
+        )
+
+    users = crud_user.get_users_by_tenant(db=db, tenant_id=tenant_id, skip=skip, limit=limit)
+    return users
+
+# ---------------------------------------------------------
+# 🔍 ENDPOINT: BUSCAR UM USUÁRIO ESPECÍFICO
+# ---------------------------------------------------------
+@router.get("/{user_id}", response_model=UserResponse)
+def read_user(
+    user_id: UUID, 
+    tenant_id: UUID, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_admin)
+):
+    if str(current_user.tenant_id) != str(tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para acessar dados de outra clínica."
+        )
+
+    user = crud_user.get_user_by_id(db=db, user_id=user_id, tenant_id=tenant_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado."
+        )
+    return user
+
+# ---------------------------------------------------------
+# 🔄 ENDPOINT: ATUALIZAR USUÁRIO
+# ---------------------------------------------------------
+@router.put("/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: UUID, 
+    tenant_id: UUID, 
+    user_in: UserUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_admin)
+):
+    if str(current_user.tenant_id) != str(tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para alterar dados de outra clínica."
+        )
+
+    user = crud_user.get_user_by_id(db=db, user_id=user_id, tenant_id=tenant_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado."
+        )
+    
+    user_updated = crud_user.update_user(db=db, db_user=user, obj_in=user_in)
+    return user_updated
+====================================================

@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, FileSpreadsheet
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info
 } from 'lucide-react';
 
 export default function Users() {
@@ -28,12 +28,6 @@ export default function Users() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); 
   const [isSaving, setIsSaving] = useState(false);
-
-  // --- NOVOS ESTADOS PARA IMPORTAÇÃO ---
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importFile, setImportFile] = useState(null);
-  const [importEntityType, setImportEntityType] = useState('professional');
-  const [importProgressText, setImportProgressText] = useState('');
   
   const [batchToggles, setBatchToggles] = useState({ papel: false, status: false, endereco_cidade: false, endereco_estado: false });
 
@@ -150,7 +144,7 @@ export default function Users() {
   const addGroup = () => setQueryBuilder(prev => ({ ...prev, groups: [...prev.groups, { id: Date.now(), logic: 'OR', rules: [{ id: Date.now() + 1, column: 'nome', operator: 'starts_with', value: '' }] }] }));
   const removeGroup = (groupId) => setQueryBuilder(prev => ({ ...prev, groups: prev.groups.filter(g => g.id !== groupId) }));
   const updateGroupLogic = (groupId, logic) => setQueryBuilder(prev => ({ ...prev, groups: prev.groups.map(g => g.id === groupId ? { ...g, logic } : g) }));
-  const addRule = (groupId) => setQueryBuilder(prev => ({ ...prev, groups: prev.groups.map(g => { if (g.id === groupId) return { ...g, rules: [...g.rules, { id: Date.now(), column: 'nome', operator: 'starts_with', value: '' }] }; return g; }) }));
+  const addRule = (groupId) => setQueryBuilder(prev => ({ ...prev, groups: prev.groups.map(g => g.id === groupId ? { ...g, rules: [...g.rules, { id: Date.now(), column: 'nome', operator: 'starts_with', value: '' }] } : g) }));
   const removeRule = (groupId, ruleId) => setQueryBuilder(prev => {
     const newGroups = prev.groups.map(g => { if (g.id === groupId) return { ...g, rules: g.rules.filter(r => r.id !== ruleId) }; return g; });
     return { ...prev, groups: newGroups.filter(g => g.rules.length > 0) }; 
@@ -242,51 +236,46 @@ export default function Users() {
     try {
       const payload = { ...formData };
       if (modalMode === 'edit') delete payload.senha; 
-      Object.keys(payload).forEach(key => { if (payload[key] === '') payload[key] = null; });
-      if (modalMode === 'create') { await api.post('/users/', payload); toast.success("Usuário criado com sucesso!"); } 
-      else if (modalMode === 'edit') { await api.put(`/users/${selectedUsers[0]}`, payload, { params: { tenant_id: formData.tenant_id } }); toast.success("Usuário atualizado!"); setSelectedUsers([]); } 
+
+      // 🛑 O FILTRO DE SANITIZAÇÃO (A MÁGICA ACONTECE AQUI)
+      // Transforma strings vazias "" em null, burlando as restrições de min_length do Pydantic
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === '') {
+          payload[key] = null;
+        }
+      });
+
+      if (modalMode === 'create') { 
+        await api.post('/users/', payload); 
+        toast.success("Usuário criado com sucesso!"); 
+      } 
+      else if (modalMode === 'edit') { 
+        await api.put(`/users/${selectedUsers[0]}`, payload, { params: { tenant_id: formData.tenant_id } }); 
+        toast.success("Usuário atualizado!"); 
+        setSelectedUsers([]); 
+      } 
       else if (modalMode === 'batch-edit') {
         const batchPayload = {}; 
         if (batchToggles.papel) batchPayload.papel = formData.papel; 
         if (batchToggles.status) batchPayload.status = formData.status;
         if (batchToggles.endereco_cidade) batchPayload.endereco_cidade = formData.endereco_cidade ? formData.endereco_cidade : null;
         if (batchToggles.endereco_estado) batchPayload.endereco_estado = formData.endereco_estado ? formData.endereco_estado : null;
+
         if (Object.keys(batchPayload).length === 0) { toast.error("Selecione pelo menos um campo para alterar."); setIsSaving(false); return; }
+        
         const loadingToast = toast.loading(`Atualizando ${selectedUsers.length} registros...`);
         for (const userId of selectedUsers) { await api.put(`/users/${userId}`, batchPayload, { params: { tenant_id: formData.tenant_id } }); }
         toast.success("Edição em lote concluída!", { id: loadingToast }); setSelectedUsers([]);
       }
       setIsModalOpen(false); fetchUsers(); 
-    } catch (err) { toast.error("Erro ao salvar. Verifique os dados."); } finally { setIsSaving(false); }
-  };
-
-  // --- LÓGICA DE IMPORTAÇÃO ETL ---
-  const handleImportFile = async (e) => {
-    e.preventDefault();
-    if (!importFile) return toast.error("Selecione um arquivo .csv ou .xlsx");
-    setIsSaving(true);
-    const loadingToast = toast.loading("Iniciando importação...");
-    try {
-      setImportProgressText('1/3: Enviando arquivo...');
-      const fd = new FormData();
-      fd.append('file', importFile);
-      fd.append('entity_type', importEntityType);
-      const uploadRes = await api.post('/import/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      const batchId = uploadRes.data.id;
-      setImportProgressText('2/3: Validando regras...');
-      await api.post(`/import/${batchId}/validate`);
-      setImportProgressText('3/3: Promovendo registros...');
-      const promoteRes = await api.post(`/import/${batchId}/promote`);
-      toast.success(promoteRes.data.mensagem || "Importação concluída!", { id: loadingToast, duration: 5000 });
-      setIsImportModalOpen(false); setImportFile(null); fetchUsers();
-    } catch (err) {
-      const msg = err.response?.data?.detail || "Erro na importação.";
-      toast.error(`Falha: ${msg}`, { id: loadingToast });
-    } finally { setIsSaving(false); setImportProgressText(''); }
+    } catch (err) { 
+      toast.error("Erro ao salvar. Verifique os dados."); 
+    } finally { setIsSaving(false); }
   };
 
   const toggleColumn = (colName) => setVisibleColumns(prev => ({ ...prev, [colName]: !prev[colName] }));
   const totalActiveRules = queryBuilder.groups.reduce((acc, g) => acc + g.rules.filter(r => r.value).length, 0);
+
   const formatDate = (isoString) => isoString ? new Date(isoString).toLocaleString('pt-BR') : '-';
 
   return (
@@ -294,45 +283,16 @@ export default function Users() {
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
-        {/* MODAL DE IMPORTAÇÃO ETL */}
-        <Modal isOpen={isImportModalOpen} onClose={() => !isSaving && setIsImportModalOpen(false)} title="Importar Dados via Planilha">
-          <form onSubmit={handleImportFile} className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex gap-3 text-blue-800 text-sm">
-              <Info className="w-5 h-5 flex-shrink-0" />
-              <p>O sistema validará as linhas antes de salvar. Duplicidades serão ignoradas.</p>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Tipo de Dado</label>
-              <select className="w-full px-4 py-2 border rounded-lg bg-white" value={importEntityType} onChange={e => setImportEntityType(e.target.value)}>
-                <option value="professional">Profissionais (Users)</option>
-                <option value="customer">Clientes (Customers)</option>
-              </select>
-            </div>
-            <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${importFile ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}>
-              <UploadCloud className="w-12 h-12 mb-3 mx-auto text-gray-400" />
-              <input type="file" id="csv-upload" className="hidden" accept=".csv, .xlsx" onChange={e => setImportFile(e.target.files[0])} />
-              <label htmlFor="csv-upload" className="cursor-pointer text-blue-600 font-bold hover:underline">
-                {importFile ? importFile.name : "Clique para selecionar o arquivo"}
-              </label>
-            </div>
-            {isSaving && <p className="text-center text-sm font-bold text-blue-600 animate-pulse">{importProgressText}</p>}
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setIsImportModalOpen(false)} disabled={isSaving} className="flex-1 px-4 py-2 border rounded-lg">Cancelar</button>
-              <button type="submit" disabled={isSaving || !importFile} className="flex-[2] px-4 py-2 bg-blue-600 text-white rounded-lg font-bold flex justify-center items-center gap-2">
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {isSaving ? 'Processando...' : 'Iniciar Importação'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}>
           <form onSubmit={handleSaveUser} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
+            
             {modalMode === 'batch-edit' && (
               <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-800 flex items-start gap-2">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <p>Você está editando <strong>{selectedUsers.length} usuários</strong> simultaneamente.</p>
+                <p>Você está editando <strong>{selectedUsers.length} usuários</strong> simultaneamente. Marque apenas os campos que deseja sobrescrever em todos eles.</p>
               </div>
             )}
+
             {modalMode !== 'batch-edit' && (
               <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
                 <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Informações Básicas</legend>
@@ -344,6 +304,7 @@ export default function Users() {
                 </div>
               </fieldset>
             )}
+
             {modalMode !== 'batch-edit' && (
               <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
                 <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Contato & Endereço</legend>
@@ -359,6 +320,7 @@ export default function Users() {
                 </div>
               </fieldset>
             )}
+
             <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
               <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Configurações de Acesso</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -372,70 +334,99 @@ export default function Users() {
                     <select disabled={modalMode === 'batch-edit' && !batchToggles.status} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}><option value="ATIVO">Ativo</option><option value="PENDENTE">Pendente</option><option value="INATIVO">Inativo</option></select>
                   </div>
                 )}
+                {modalMode === 'batch-edit' && (
+                  <>
+                    <div className={`p-3 rounded-lg border ${!batchToggles.endereco_cidade ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}><label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.endereco_cidade} onChange={e => setBatchToggles({...batchToggles, endereco_cidade: e.target.checked})} className="rounded text-blue-600" />Sobrescrever Cidade</label><input disabled={!batchToggles.endereco_cidade} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none disabled:bg-gray-50" value={formData.endereco_cidade} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} /></div>
+                    <div className={`p-3 rounded-lg border ${!batchToggles.endereco_estado ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}><label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.endereco_estado} onChange={e => setBatchToggles({...batchToggles, endereco_estado: e.target.checked})} className="rounded text-blue-600" />Sobrescrever Estado (UF)</label><input disabled={!batchToggles.endereco_estado} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none disabled:bg-gray-50" value={formData.endereco_estado} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} /></div>
+                  </>
+                )}
               </div>
             </fieldset>
+
             {modalMode !== 'batch-edit' && (
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Observações Internas</label><textarea rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Anotações..." value={formData.observacoes} onChange={e => setFormData({...formData, observacoes: e.target.value})} /></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Observações Internas</label>
+                <textarea rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Anotações sobre este usuário..." value={formData.observacoes} onChange={e => setFormData({...formData, observacoes: e.target.value})} />
+              </div>
             )}
+
             {modalMode === 'edit' && editingAuditData && (
-              <div className="mt-6 pt-4 border-t border-gray-200 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border">
-                <div className="grid grid-cols-2 gap-y-2">
-                  <div><span className="font-semibold">ID:</span> {editingAuditData.id}</div>
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-gray-500 mb-3"><Info className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wider">Auditoria do Registro</span></div>
+                <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <div><span className="font-semibold">ID no Banco:</span> {editingAuditData.id}</div>
                   <div><span className="font-semibold">Criado em:</span> {formatDate(editingAuditData.criado_em)}</div>
                   <div><span className="font-semibold">Criado por:</span> {editingAuditData.criado_por || '-'}</div>
-                  <div><span className="font-semibold text-red-500">Inativado em:</span> {formatDate(editingAuditData.deletado_em)}</div>
+                  <div><span className="font-semibold">Última alteração:</span> {formatDate(editingAuditData.alterado_em)}</div>
+                  <div><span className="font-semibold">Alterado por:</span> {editingAuditData.alterado_por || '-'}</div>
+                  {editingAuditData.deletado_em && <div><span className="font-semibold text-red-500">Inativado em:</span> <span className="text-red-500">{formatDate(editingAuditData.deletado_em)}</span></div>}
+                  {editingAuditData.deletado_por && <div><span className="font-semibold text-red-500">Inativado por:</span> <span className="text-red-500">{editingAuditData.deletado_por}</span></div>}
                 </div>
               </div>
             )}
-            <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t mt-4 flex gap-3">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 border rounded-lg font-medium">Cancelar</button>
-              <button type="submit" disabled={isSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold flex justify-center items-center gap-2">
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {modalMode === 'create' ? 'Salvar Novo' : 'Salvar Alterações'}
+
+            <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t mt-4 border-gray-100 flex gap-3">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button type="submit" disabled={isSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg flex justify-center items-center gap-2 font-bold hover:bg-blue-700 transition-colors">
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />} 
+                {modalMode === 'create' ? 'Salvar Novo Usuário' : modalMode === 'edit' ? 'Salvar Alterações' : 'Aplicar em Lote'}
               </button>
             </div>
           </form>
         </Modal>
 
-        <div><h1 className="text-3xl font-bold text-gray-900">Usuários</h1><p className="text-gray-500 mt-1">Gestão de acessos e perfis da clínica.</p></div>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Usuários</h1>
+          <p className="text-gray-500 mt-1">Gestão de Usuários e Acessos.</p>
+        </div>
 
         <div className="flex flex-col">
           <div className={`bg-white p-4 rounded-t-xl shadow-sm border border-gray-200 flex gap-4 items-center justify-between ${showFilters ? 'border-b-0 rounded-b-none' : ''}`}>
             <div className="relative flex-1 max-w-md flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input type="text" placeholder="Pesquisa rápida..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input type="text" placeholder="Pesquisa rápida (Nome, E-mail, CPF, ID)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm" />
               </div>
-              <button onClick={() => { setShowFilters(!showFilters); if(!showFilters && queryBuilder.groups.length === 0) addGroup(); }} className={`p-2 rounded-lg border transition-colors ${showFilters || totalActiveRules > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+              <button onClick={() => { setShowFilters(!showFilters); if(!showFilters && queryBuilder.groups.length === 0) addGroup(); }} className={`p-2 rounded-lg border transition-colors flex items-center gap-2 ${showFilters || totalActiveRules > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <Filter className="w-5 h-5" />
+                {totalActiveRules > 0 && <span className="bg-blue-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalActiveRules}</span>}
               </button>
             </div>
+
             <div className="flex items-center gap-2">
               {selectedUsers.length > 0 && (
-                <div className="flex items-center gap-2 mr-2 pr-4 border-r">
+                <div className="flex items-center gap-2 mr-2 pr-4 border-r border-gray-200">
                   <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-md">{selectedUsers.length}</span>
-                  <button onClick={handleOpenEdit} className="p-2 text-gray-600 hover:text-blue-600 rounded-lg"><Edit2 className="w-5 h-5" /></button>
-                  <button onClick={handleQuickInactivate} className="p-2 text-gray-600 hover:text-red-600 rounded-lg"><UserX className="w-5 h-5" /></button>
+                  <button onClick={handleOpenEdit} className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Editar"><Edit2 className="w-5 h-5" /></button>
+                  <button onClick={handleQuickInactivate} className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Inativar em Lote"><UserX className="w-5 h-5" /></button>
                 </div>
               )}
+              
               <div className="relative">
-                <button onClick={() => setShowColumnMenu(!showColumnMenu)} className="p-2 border rounded-lg hover:bg-gray-50 text-gray-600"><Settings2 className="w-5 h-5" /></button>
+                <button onClick={() => setShowColumnMenu(!showColumnMenu)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Configurar Colunas">
+                  <Settings2 className="w-5 h-5" />
+                </button>
+                
                 {showColumnMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white border shadow-xl rounded-xl z-50 py-2 max-h-96 overflow-y-auto">
+                  <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 shadow-xl rounded-xl z-50 py-2 max-h-96 overflow-y-auto">
+                    <div className="px-4 py-2 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase mb-1">Colunas Visíveis</div>
                     {Object.keys(visibleColumns).map(col => (
-                      <label key={col} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm capitalize">
-                        <input type="checkbox" checked={visibleColumns[col]} onChange={() => toggleColumn(col)} className="rounded text-blue-600 mr-3" /> {col.replace(/_/g, ' ')}
+                      <label key={col} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm capitalize text-gray-700">
+                        <input type="checkbox" checked={visibleColumns[col]} onChange={() => toggleColumn(col)} className="rounded text-blue-600 mr-3 focus:ring-blue-500" /> 
+                        {col === 'id' ? 'ID do Banco' : col.replace(/_/g, ' ')}
                       </label>
                     ))}
                   </div>
                 )}
               </div>
-              <button onClick={handleExportCSV} className="p-2 border rounded-lg hover:bg-gray-50 text-gray-600"><Download className="w-5 h-5" /></button>
+
+              <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Exportar CSV"><Download className="w-5 h-5" /></button>
               <div className="relative">
                 <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
                 {showAddMenu && (
-                  <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
                     <button onClick={handleOpenCreate} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"><UserPlus className="w-4 h-4 mr-2 text-blue-600" /> Novo Usuário</button>
-                    <button onClick={() => { setShowAddMenu(false); setIsImportModalOpen(true); }} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 border-t border-gray-100"><FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Importar Planilha</button>
+                    <button onClick={() => setShowAddMenu(false)} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"><UploadCloud className="w-4 h-4 mr-2 text-blue-600" /> Importar de CSV</button>
                   </div>
                 )}
               </div>
@@ -443,73 +434,97 @@ export default function Users() {
           </div>
 
           {showFilters && (
-            <div className="bg-gray-50 p-5 border border-t-0 border-gray-200 rounded-b-xl shadow-sm mb-4">
-               <div className="flex justify-between items-center mb-4 border-b pb-3">
-                <div className="flex items-center gap-3"><Layers className="w-5 h-5 text-gray-500" /><span className="text-sm font-bold">Filtros Avançados</span></div>
-                <button onClick={clearFilters} className="text-xs text-red-600 font-medium underline">Limpar Todos</button>
+            <div className="bg-gray-50 p-5 border border-t-0 border-gray-200 rounded-b-xl shadow-sm mb-4 animate-in slide-in-from-top-2 duration-200">
+              <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-3">
+                <div className="flex items-center gap-3">
+                  <Layers className="w-5 h-5 text-gray-500" />
+                  <span className="text-sm font-bold text-gray-700">Mostrar resultados que correspondam a</span>
+                  <select value={queryBuilder.rootLogic} onChange={e => setQueryBuilder({...queryBuilder, rootLogic: e.target.value})} className="text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1 outline-none">
+                    <option value="AND">TODOS os Grupos (E)</option>
+                    <option value="OR">QUALQUER Grupo (OU)</option>
+                  </select>
+                </div>
+                <button onClick={clearFilters} className="text-xs text-red-600 hover:text-red-800 font-medium">Limpar Todos os Filtros</button>
               </div>
+              
               <div className="space-y-4">
                 {queryBuilder.groups.map((group, groupIndex) => (
-                  <div key={group.id} className="bg-white p-4 border rounded-lg shadow-sm">
-                    <div className="flex items-center gap-2 mb-3 border-b pb-2">
-                      <select value={group.logic} onChange={e => updateGroupLogic(group.id, e.target.value)} className="text-xs font-bold border rounded px-1 outline-none bg-gray-50">
-                        <option value="OR">QUALQUER regra (OU)</option><option value="AND">TODAS as regras (E)</option>
+                  <div key={group.id} className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm relative">
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                      <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded">GRUPO {groupIndex + 1}</span>
+                      <span className="text-xs text-gray-500">Corresponder a</span>
+                      <select value={group.logic} onChange={e => updateGroupLogic(group.id, e.target.value)} className="text-xs font-bold text-gray-700 border border-gray-300 rounded px-1 outline-none bg-gray-50">
+                        <option value="OR">QUALQUER regra abaixo (OU)</option>
+                        <option value="AND">TODAS as regras abaixo (E)</option>
                       </select>
-                      <button onClick={() => removeGroup(group.id)} className="ml-auto p-1 text-gray-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => removeGroup(group.id)} className="ml-auto p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="Remover Grupo"><Trash2 className="w-4 h-4" /></button>
                     </div>
-                    <div className="space-y-2">
+
+                    <div className="space-y-2 pl-2 border-l-2 border-blue-200">
                       {group.rules.map((rule, ruleIndex) => (
                         <div key={rule.id} className="flex gap-3 items-center">
-                          <select className="px-3 py-1.5 border rounded-lg text-sm bg-white" value={rule.column} onChange={e => updateRule(group.id, rule.id, 'column', e.target.value)}>
-                            {Object.keys(visibleColumns).map(col => (<option key={col} value={col}>{col.replace(/_/g, ' ')}</option>))}
+                          <span className="text-xs font-bold text-blue-400 w-8 text-center">{ruleIndex === 0 ? '►' : group.logic === 'AND' ? 'E' : 'OU'}</span>
+                          <select className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.column} onChange={e => updateRule(group.id, rule.id, 'column', e.target.value)}>
+                            {Object.keys(visibleColumns).map(col => (<option key={col} value={col}>{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</option>))}
                           </select>
-                          <select className="px-3 py-1.5 border rounded-lg text-sm bg-white" value={rule.operator} onChange={e => updateRule(group.id, rule.id, 'operator', e.target.value)}>
-                            <option value="starts_with">Começa com</option><option value="contains">Contém</option><option value="equals">É igual a</option>
+                          <select className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.operator} onChange={e => updateRule(group.id, rule.id, 'operator', e.target.value)}>
+                            <option value="starts_with">Começa com</option><option value="contains">Contém</option><option value="equals">É igual a</option><option value="not_equals">É diferente de</option>
                           </select>
-                          <input type="text" className="flex-1 px-3 py-1.5 border rounded-lg text-sm outline-none" value={rule.value} onChange={e => updateRule(group.id, rule.id, 'value', e.target.value)} />
-                          <button onClick={() => removeRule(group.id, rule.id)} className="p-1.5 text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                          {['role', 'papel', 'status'].includes(rule.column) ? (
+                            <select className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.value} onChange={e => updateRule(group.id, rule.id, 'value', e.target.value)}>
+                              <option value="">Selecione...</option>
+                              {['role', 'papel'].includes(rule.column) ? <><option value="TENANT_ADMIN">Admin</option><option value="PROFISSIONAL">Profissional</option><option value="CLIENTE">Cliente</option></> : <><option value="ATIVO">Ativo</option><option value="PENDENTE">Pendente</option><option value="INATIVO">Inativo</option></>}
+                            </select>
+                          ) : <input type="text" className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Digite o valor..." value={rule.value} onChange={e => updateRule(group.id, rule.id, 'value', e.target.value)} />}
+                          <button onClick={() => removeRule(group.id, rule.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><X className="w-4 h-4" /></button>
                         </div>
                       ))}
-                      <button onClick={() => addRule(group.id)} className="mt-2 text-xs font-semibold text-blue-600 flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar Regra</button>
+                      <button onClick={() => addRule(group.id)} className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar Regra</button>
                     </div>
                   </div>
                 ))}
               </div>
-              <button onClick={addGroup} className="mt-4 text-sm font-bold text-gray-700 bg-white border px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 shadow-sm"><Layers className="w-4 h-4" /> Novo Grupo</button>
+              <button onClick={addGroup} className="mt-4 text-sm font-bold text-gray-700 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 shadow-sm"><Layers className="w-4 h-4" /> Adicionar Novo Grupo</button>
             </div>
           )}
 
           <div className={`bg-white border border-gray-200 overflow-x-auto shadow-sm relative ${showFilters ? 'rounded-xl' : 'border-t-0 rounded-b-xl'}`}>
             <table className="w-full text-left min-w-[1200px]">
-              <thead className="bg-gray-50 border-b text-gray-500 text-sm uppercase sticky top-0 z-10">
+              <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm uppercase sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-4 w-12 text-center"><input type="checkbox" onChange={e => e.target.checked ? setSelectedUsers(paginatedUsers.map(u => u.id)) : setSelectedUsers([])} checked={selectedUsers.length > 0 && selectedUsers.length === paginatedUsers.length} /></th>
-                  {Object.keys(visibleColumns).map(col => visibleColumns[col] && <th key={col} className="px-6 py-4 whitespace-nowrap">{col.replace(/_/g, ' ')}</th>)}
+                  <th className="px-6 py-4 w-12"><input type="checkbox" onChange={e => e.target.checked ? setSelectedUsers(paginatedUsers.map(u => u.id)) : setSelectedUsers([])} checked={selectedUsers.length > 0 && selectedUsers.length === paginatedUsers.length} /></th>
+                  {Object.keys(visibleColumns).map(col => visibleColumns[col] && <th key={col} className="px-6 py-4 capitalize font-semibold tracking-wider whitespace-nowrap">{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</th>)}
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-gray-200">
                 {paginatedUsers.length === 0 ? (
-                   <tr><td colSpan={20} className="px-6 py-12 text-center text-gray-500">Nenhum registro encontrado.</td></tr>
+                   <tr><td colSpan={15} className="px-6 py-12 text-center text-gray-500 font-medium">Nenhum registro encontrado.</td></tr>
                 ) : (
                   paginatedUsers.map((user) => (
                     <tr key={user.id} className={`hover:bg-blue-50/50 transition-colors ${selectedUsers.includes(user.id) ? 'bg-blue-50' : ''}`}>
-                      <td className="px-6 py-4 text-center"><input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => setSelectedUsers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
+                      <td className="px-6 py-4"><input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => setSelectedUsers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
                       {visibleColumns.id && <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>}
-                      {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900">{user.nome}</td>}
-                      {visibleColumns.email && <td className="px-6 py-4 text-gray-600">{user.email}</td>}
+                      {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>}
+                      {visibleColumns.email && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>}
                       {visibleColumns.role && <td className="px-6 py-4 text-xs font-semibold text-gray-500">{user.papel || user.role}</td>}
-                      {visibleColumns.telefone && <td className="px-6 py-4 text-gray-600">{user.telefone || '-'}</td>}
-                      {visibleColumns.status && <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{user.status}</span></td>}
-                      {visibleColumns.cpf && <td className="px-6 py-4 text-gray-600">{user.cpf || '-'}</td>}
-                      {visibleColumns.telefone_contato && <td className="px-6 py-4 text-gray-600">{user.telefone_contato || '-'}</td>}
-                      {visibleColumns.endereco_cidade && <td className="px-6 py-4 text-gray-600">{user.endereco_cidade || '-'}</td>}
+                      {visibleColumns.telefone && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.telefone || '-'}</td>}
+                      {visibleColumns.status && (
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700 border border-green-200' : user.status === 'PENDENTE' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{user.status}</span>
+                        </td>
+                      )}
+                      
+                      {visibleColumns.cpf && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.cpf || '-'}</td>}
+                      {visibleColumns.telefone_contato && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.telefone_contato || '-'}</td>}
+                      {visibleColumns.endereco_cidade && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.endereco_cidade || '-'}</td>}
                       {visibleColumns.endereco_estado && <td className="px-6 py-4 text-gray-600">{user.endereco_estado || '-'}</td>}
-                      {visibleColumns.criado_em && <td className="px-6 py-4 text-gray-500 text-xs">{formatDate(user.criado_em)}</td>}
-                      {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs">{user.criado_por || '-'}</td>}
-                      {visibleColumns.alterado_em && <td className="px-6 py-4 text-gray-500 text-xs">{formatDate(user.alterado_em)}</td>}
-                      {visibleColumns.alterado_por && <td className="px-6 py-4 text-gray-500 text-xs">{user.alterado_por || '-'}</td>}
-                      {visibleColumns.deletado_em && <td className={`px-6 py-4 text-xs ${user.status === 'INATIVO' ? 'text-red-500' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? formatDate(user.deletado_em) : '-'}</td>}
-                      {visibleColumns.deletado_por && <td className={`px-6 py-4 text-xs ${user.status === 'INATIVO' ? 'text-red-500' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? (user.deletado_por || 'Sistema') : '-'}</td>}
+                      
+                      {visibleColumns.criado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user.criado_em)}</td>}
+                      {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{user.criado_por || '-'}</td>}
+                      {visibleColumns.alterado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user.alterado_em)}</td>}
+                      {visibleColumns.alterado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{user.alterado_por || '-'}</td>}
+                      {visibleColumns.deletado_em && <td className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? formatDate(user.deletado_em) : '-'}</td>}
+                      {visibleColumns.deletado_por && <td className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? (user.deletado_por || 'Sistema') : '-'}</td>}
                     </tr>
                   ))
                 )}
@@ -524,13 +539,13 @@ export default function Users() {
               <Clock className="w-4 h-4" /> <span className="font-medium">Carregado em {perfMetrics.total}ms</span>
             </button>
             {showPerfDetails && (
-              <div className="absolute bottom-10 left-0 bg-white border border-gray-200 shadow-xl rounded-xl p-4 w-64 z-50 text-gray-700">
-                <div className="flex items-center gap-2 mb-3 border-b pb-2"><Activity className="w-4 h-4 text-blue-600" /><h4 className="font-bold text-sm">Análise de Performance</h4></div>
+              <div className="absolute bottom-10 left-0 bg-white border border-gray-200 shadow-xl rounded-xl p-4 w-64 z-50 text-gray-700 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2"><Activity className="w-4 h-4 text-blue-600" /><h4 className="font-bold text-sm text-gray-900">Análise de Performance</h4></div>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center"><span>Rede:</span> <span className="font-semibold">{perfMetrics.network}ms</span></div>
-                  <div className="flex justify-between items-center"><span>Servidor:</span> <span className="font-semibold">{perfMetrics.server}ms</span></div>
-                  <div className="flex justify-between items-center"><span>Navegador:</span> <span className="font-semibold">{perfMetrics.browser}ms</span></div>
-                  <div className="pt-2 mt-2 border-t flex justify-between items-center"><span className="font-bold">Total:</span> <span className="font-bold text-blue-600">{perfMetrics.total}ms</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-500">Tempo de Rede:</span> <span className="font-semibold">{perfMetrics.network}ms</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-500">API (Servidor):</span> <span className="font-semibold">{perfMetrics.server}ms</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-500">Render (Browser):</span> <span className="font-semibold">{perfMetrics.browser}ms</span></div>
+                  <div className="pt-2 mt-2 border-t border-gray-100 flex justify-between items-center"><span className="font-bold text-gray-900">Tempo Total:</span> <span className="font-bold text-blue-600 text-base">{perfMetrics.total}ms</span></div>
                 </div>
               </div>
             )}
@@ -538,15 +553,15 @@ export default function Users() {
 
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <span>Linhas:</span>
-              <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="border rounded px-2 py-1 bg-white outline-none">
-                <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+              <span>Linhas por página:</span>
+              <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="border border-gray-300 rounded px-2 py-1 bg-white outline-none focus:border-blue-500 text-gray-700 font-medium cursor-pointer">
+                <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={100000}>Todos</option>
               </select>
             </div>
             <div className="font-medium">{filteredUsers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} de {filteredUsers.length}</div>
             <div className="flex items-center gap-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-              <button disabled={currentPage * itemsPerPage >= filteredUsers.length} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronRight className="w-5 h-5 text-gray-600" /></button>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
+              <button disabled={currentPage * itemsPerPage >= filteredUsers.length} onClick={() => setCurrentPage(prev => prev + 1)} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronRight className="w-5 h-5 text-gray-600" /></button>
             </div>
           </div>
         </div>

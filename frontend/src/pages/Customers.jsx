@@ -6,11 +6,12 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, Lock
 } from 'lucide-react';
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
+  const [professionals, setProfessionals] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -48,6 +49,15 @@ export default function Customers() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // ==========================================
+  // ESTADOS DO NOVO MODAL DE HISTÓRICO
+  // ==========================================
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedHistoryCustomer, setSelectedHistoryCustomer] = useState(null);
+  const [customerAppointments, setCustomerAppointments] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
+
   const fetchCustomers = async () => {
     const startTime = performance.now();
     try {
@@ -55,10 +65,15 @@ export default function Customers() {
       if (!token) return;
       const decoded = jwtDecode(token);
       
-      const response = await api.get('/customers/', { params: { tenant_id: decoded.tenant_id } });
+      const [resCust, resProf] = await Promise.all([
+          api.get('/customers/', { params: { tenant_id: decoded.tenant_id } }),
+          api.get('/users/', { params: { tenant_id: decoded.tenant_id } })
+      ]);
       const endTime = performance.now(); 
       
-      setCustomers(response.data);
+      setCustomers(resCust.data);
+      setProfessionals(resProf.data);
+
       if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
       
       requestAnimationFrame(() => {
@@ -68,13 +83,7 @@ export default function Customers() {
         const networkEstimate = apiTotal - serverEstimate;
         const browserEstimate = Math.round(renderTime - endTime);
         
-        setPerfMetrics({
-          server: serverEstimate,
-          network: networkEstimate,
-          browser: browserEstimate,
-          api: apiTotal,
-          total: apiTotal + browserEstimate
-        });
+        setPerfMetrics({ server: serverEstimate, network: networkEstimate, browser: browserEstimate, api: apiTotal, total: apiTotal + browserEstimate });
       });
 
     } catch (err) {
@@ -91,6 +100,69 @@ export default function Customers() {
     setSelectedCustomers([]); 
   }, [searchTerm, queryBuilder, itemsPerPage]);
 
+  // ==========================================
+  // FUNÇÕES DO HISTÓRICO DE AGENDAMENTOS
+  // ==========================================
+  const openHistoryModal = async (customer) => {
+      setSelectedHistoryCustomer(customer);
+      setHistoryFilters({ dataInicio: '', dataFim: '' });
+      setIsHistoryModalOpen(true);
+      setIsHistoryLoading(true);
+      try {
+          const tenantId = jwtDecode(localStorage.getItem('medsched_token')).tenant_id;
+          const res = await api.get('/appointments/', { params: { tenant_id: tenantId } });
+          const myApps = res.data.filter(app => app.customer_id === customer.id).sort((a,b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
+          setCustomerAppointments(myApps);
+      } catch (err) {
+          toast.error("Erro ao carregar o histórico.");
+      } finally {
+          setIsHistoryLoading(false);
+      }
+  };
+
+  const filteredHistory = useMemo(() => {
+      let result = customerAppointments;
+      if (historyFilters.dataInicio) {
+          const start = new Date(historyFilters.dataInicio); start.setHours(0,0,0,0);
+          result = result.filter(app => new Date(app.data_hora_inicio) >= start);
+      }
+      if (historyFilters.dataFim) {
+          const end = new Date(historyFilters.dataFim); end.setHours(23,59,59,999);
+          result = result.filter(app => new Date(app.data_hora_inicio) <= end);
+      }
+      return result;
+  }, [customerAppointments, historyFilters]);
+
+  const handleExportHistoryCSV = () => {
+    if (filteredHistory.length === 0) return toast.error("Nenhum dado para exportar.");
+    const csvRows = ['Data/Horario,Status,Profissional,Observacoes'];
+    filteredHistory.forEach(app => {
+      const dataHora = new Date(app.data_hora_inicio).toLocaleString('pt-BR');
+      const status = app.status ? String(app.status).toUpperCase() : 'N/A';
+      const profName = professionals.find(p => p.id === app.profissional_id)?.nome || 'Profissional';
+      const obs = app.observacoes_internas ? app.observacoes_internas.replace(/(\r\n|\n|\r)/gm, " ") : '';
+      csvRows.push(`"${dataHora}","${status}","${profName}","${obs}"`);
+    });
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Historico_${selectedHistoryCustomer?.nome.replace(/\s+/g, '_')}.csv`;
+    link.click();
+    toast.success("Histórico exportado!");
+  };
+
+  const getSolidStatusStyle = (status) => {
+    switch(status?.toLowerCase()) {
+      case 'confirmado': return { backgroundColor: '#3b82f6', color: '#ffffff', borderColor: '#2563eb' };
+      case 'concluido': return { backgroundColor: '#10b981', color: '#ffffff', borderColor: '#059669' };
+      case 'cancelado_cliente': case 'cancelado_profissional': case 'no_show': return { backgroundColor: '#64748b', color: '#ffffff', borderColor: '#475569' };
+      default: return { backgroundColor: '#f59e0b', color: '#ffffff', borderColor: '#d97706' };
+    }
+  };
+
+  // ==========================================
+  // FUNÇÕES DA TABELA PRINCIPAL
+  // ==========================================
   const filteredCustomers = useMemo(() => {
     let result = customers;
     if (searchTerm) {
@@ -218,8 +290,7 @@ export default function Customers() {
         tenant_id: c.tenant_id 
       });
       setEditingAuditData({
-        id: c.id,
-        criado_em: c.criado_em, criado_por: c.criado_por,
+        id: c.id, criado_em: c.criado_em, criado_por: c.criado_por,
         alterado_em: c.alterado_em, alterado_por: c.alterado_por,
         deletado_em: c.deletado_em, deletado_por: c.deletado_por
       });
@@ -239,13 +310,7 @@ export default function Customers() {
     e.preventDefault(); setIsSaving(true);
     try {
       const payload = { ...formData };
-
-      // 🛑 O FILTRO DE SANITIZAÇÃO IGUAL AO DE USUÁRIOS
-      Object.keys(payload).forEach(key => {
-        if (payload[key] === '') {
-          payload[key] = null;
-        }
-      });
+      Object.keys(payload).forEach(key => { if (payload[key] === '') payload[key] = null; });
       if (payload.status) payload.status = payload.status.toUpperCase();
 
       if (modalMode === 'create') { 
@@ -284,6 +349,64 @@ export default function Customers() {
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
+        {/* MODAL DE HISTÓRICO DE AGENDAMENTOS */}
+        <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Histórico: ${selectedHistoryCustomer?.nome}`}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">A partir de</label>
+                        <input type="date" className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataInicio} onChange={e => setHistoryFilters({...historyFilters, dataInicio: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Até o dia</label>
+                        <input type="date" className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataFim} onChange={e => setHistoryFilters({...historyFilters, dataFim: e.target.value})} />
+                    </div>
+                </div>
+                <button onClick={handleExportHistoryCSV} disabled={filteredHistory.length === 0} className="flex items-center gap-2 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-slate-300 shadow-sm mt-4">
+                    <Download className="w-4 h-4" /> Exportar CSV
+                </button>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[50vh] overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-wider sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">Data e Hora</th>
+                    <th className="px-4 py-3 font-bold">Status</th>
+                    <th className="px-4 py-3 font-bold">Profissional</th>
+                    <th className="px-4 py-3 font-bold">Observações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {isHistoryLoading ? (
+                      <tr><td colSpan="4" className="text-center py-10"><Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" /></td></tr>
+                  ) : filteredHistory.length === 0 ? (
+                      <tr><td colSpan="4" className="text-center py-10 text-slate-400 font-medium">Nenhum agendamento encontrado no período.</td></tr>
+                  ) : (
+                    filteredHistory.map(app => {
+                        const profName = professionals.find(p => p.id === app.profissional_id)?.nome || 'Profissional';
+                        return (
+                          <tr key={app.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 font-bold text-slate-700 whitespace-nowrap">{new Date(app.data_hora_inicio).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
+                            <td className="px-4 py-3">
+                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase shadow-sm border whitespace-nowrap" style={getSolidStatusStyle(app.status)}>
+                                    {app.status ? String(app.status).replace(/_/g, ' ') : 'N/A'}
+                                </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{profName}</td>
+                            <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[200px]" title={app.observacoes_internas}>{app.observacoes_internas || '-'}</td>
+                          </tr>
+                        )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
+
+        {/* MODAL DE CRIAÇÃO/EDIÇÃO DE CLIENTE */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Cliente" : modalMode === 'edit' ? "Editar Cliente" : "Edição em Lote"}>
           <form onSubmit={handleSaveCustomer} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
@@ -324,7 +447,6 @@ export default function Customers() {
               </fieldset>
             )}
 
-            {/* Este é o bloco de Endereço idêntico ao Users.jsx */}
             {modalMode !== 'batch-edit' && (
               <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
                 <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Contato & Endereço</legend>
@@ -367,7 +489,6 @@ export default function Customers() {
               </fieldset>
             )}
 
-            {/* Este é o bloco de Configurações de Acesso idêntico ao Users.jsx */}
             <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
               <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Configurações de Cadastro</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -542,6 +663,7 @@ export default function Customers() {
               <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm uppercase sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-4 w-12"><input type="checkbox" onChange={e => e.target.checked ? setSelectedCustomers(paginatedCustomers.map(u => u.id)) : setSelectedCustomers([])} checked={selectedCustomers.length > 0 && selectedCustomers.length === paginatedCustomers.length} /></th>
+                  <th className="px-2 py-4 w-12 text-center">Ações</th> 
                   {Object.keys(visibleColumns).map(col => visibleColumns[col] && <th key={col} className="px-6 py-4 capitalize font-semibold tracking-wider whitespace-nowrap">{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</th>)}
                 </tr>
               </thead>
@@ -550,8 +672,15 @@ export default function Customers() {
                    <tr><td colSpan={15} className="px-6 py-12 text-center text-gray-500 font-medium">Nenhum registro encontrado.</td></tr>
                 ) : (
                   paginatedCustomers.map((user) => (
-                    <tr key={user.id} className={`hover:bg-blue-50/50 transition-colors ${selectedCustomers.includes(user.id) ? 'bg-blue-50' : ''}`}>
+                    <tr key={user.id} className={`hover:bg-blue-50/50 transition-colors group ${selectedCustomers.includes(user.id) ? 'bg-blue-50' : ''}`}>
                       <td className="px-6 py-4"><input type="checkbox" checked={selectedCustomers.includes(user.id)} onChange={() => setSelectedCustomers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
+                      
+                      <td className="px-2 py-4 text-center">
+                          <button onClick={() => openHistoryModal(user)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all" title="Ver Histórico de Agendamentos">
+                              <CalendarDays className="w-4 h-4" />
+                          </button>
+                      </td>
+
                       {visibleColumns.id && <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>}
                       {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>}
                       {visibleColumns.cpf_cnpj && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.cpf_cnpj || '-'}</td>}
