@@ -6,11 +6,12 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, Lock, MapPin
 } from 'lucide-react';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
+  const [customers, setCustomers] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -34,7 +35,7 @@ export default function Users() {
   const [formData, setFormData] = useState({ 
     nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', tenant_id: '',
     cpf: '', telefone: '', telefone_contato: '', 
-    endereco_logradouro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '',
+    endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '',
     observacoes: ''
   });
 
@@ -53,6 +54,13 @@ export default function Users() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const [isCheckingCEP, setIsCheckingCEP] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedHistoryUser, setSelectedHistoryUser] = useState(null);
+  const [userAppointments, setUserAppointments] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
+
   const fetchUsers = async () => {
     const startTime = performance.now();
     try {
@@ -61,10 +69,15 @@ export default function Users() {
       const decoded = jwtDecode(token);
       setCurrentUserId(decoded.sub);
       
-      const response = await api.get('/users/', { params: { tenant_id: decoded.tenant_id } });
+      const [resUsers, resCust] = await Promise.all([
+          api.get('/users/', { params: { tenant_id: decoded.tenant_id } }),
+          api.get('/customers/', { params: { tenant_id: decoded.tenant_id } })
+      ]);
       const endTime = performance.now(); 
       
-      setUsers(response.data);
+      setUsers(resUsers.data);
+      setCustomers(resCust.data);
+
       if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
       
       requestAnimationFrame(() => {
@@ -74,13 +87,7 @@ export default function Users() {
         const networkEstimate = apiTotal - serverEstimate;
         const browserEstimate = Math.round(renderTime - endTime);
         
-        setPerfMetrics({
-          server: serverEstimate,
-          network: networkEstimate,
-          browser: browserEstimate,
-          api: apiTotal,
-          total: apiTotal + browserEstimate
-        });
+        setPerfMetrics({ server: serverEstimate, network: networkEstimate, browser: browserEstimate, api: apiTotal, total: apiTotal + browserEstimate });
       });
 
     } catch (err) {
@@ -96,6 +103,87 @@ export default function Users() {
     setCurrentPage(1);
     setSelectedUsers([]); 
   }, [searchTerm, queryBuilder, itemsPerPage]);
+
+  const handleCEPLookup = async (cep) => {
+    const cleanCEP = cep.replace(/\D/g, '');
+    setFormData(prev => ({ ...prev, endereco_cep: cleanCEP }));
+    if (cleanCEP.length === 8) {
+      setIsCheckingCEP(true);
+      try {
+        const response = await api.get(`/utils/cep/${cleanCEP}`);
+        const data = response.data;
+        setFormData(prev => ({
+          ...prev,
+          endereco_logradouro: data.logradouro || '',
+          endereco_bairro: data.bairro || '',
+          endereco_cidade: data.localidade || '',
+          endereco_estado: data.uf || ''
+        }));
+        toast.success("Endereço localizado com sucesso!");
+      } catch (err) {
+        toast.error("CEP não encontrado.");
+      } finally {
+        setIsCheckingCEP(false);
+      }
+    }
+  };
+
+  const openHistoryModal = async (user) => {
+      setSelectedHistoryUser(user);
+      setHistoryFilters({ dataInicio: '', dataFim: '' });
+      setIsHistoryModalOpen(true);
+      setIsHistoryLoading(true);
+      try {
+          const tenantId = jwtDecode(localStorage.getItem('medsched_token')).tenant_id;
+          const res = await api.get('/appointments/', { params: { tenant_id: tenantId } });
+          const myApps = res.data.filter(app => app.profissional_id === user.id).sort((a,b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
+          setUserAppointments(myApps);
+      } catch (err) {
+          toast.error("Erro ao carregar a agenda do profissional.");
+      } finally {
+          setIsHistoryLoading(false);
+      }
+  };
+
+  const filteredHistory = useMemo(() => {
+      let result = userAppointments;
+      if (historyFilters.dataInicio) {
+          const start = new Date(historyFilters.dataInicio); start.setHours(0,0,0,0);
+          result = result.filter(app => new Date(app.data_hora_inicio) >= start);
+      }
+      if (historyFilters.dataFim) {
+          const end = new Date(historyFilters.dataFim); end.setHours(23,59,59,999);
+          result = result.filter(app => new Date(app.data_hora_inicio) <= end);
+      }
+      return result;
+  }, [userAppointments, historyFilters]);
+
+  const handleExportHistoryCSV = () => {
+    if (filteredHistory.length === 0) return toast.error("Nenhum dado para exportar.");
+    const csvRows = ['Data/Horario,Status,Cliente,Observacoes'];
+    filteredHistory.forEach(app => {
+      const dataHora = new Date(app.data_hora_inicio).toLocaleString('pt-BR');
+      const status = app.status ? String(app.status).toUpperCase() : 'N/A';
+      const custName = customers.find(c => c.id === app.customer_id)?.nome || 'Cliente';
+      const obs = app.observacoes_internas ? app.observacoes_internas.replace(/(\r\n|\n|\r)/gm, " ") : '';
+      csvRows.push(`"${dataHora}","${status}","${custName}","${obs}"`);
+    });
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Agenda_${selectedHistoryUser?.nome.replace(/\s+/g, '_')}.csv`;
+    link.click();
+    toast.success("Agenda exportada!");
+  };
+
+  const getSolidStatusStyle = (status) => {
+    switch(status?.toLowerCase()) {
+      case 'confirmado': return { backgroundColor: '#3b82f6', color: '#ffffff', borderColor: '#2563eb' };
+      case 'concluido': return { backgroundColor: '#10b981', color: '#ffffff', borderColor: '#059669' };
+      case 'cancelado_cliente': case 'cancelado_profissional': case 'no_show': return { backgroundColor: '#64748b', color: '#ffffff', borderColor: '#475569' };
+      default: return { backgroundColor: '#f59e0b', color: '#ffffff', borderColor: '#d97706' };
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     let result = users;
@@ -199,7 +287,7 @@ export default function Users() {
     setFormData({ 
       nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', 
       cpf: '', telefone: '', telefone_contato: '', 
-      endereco_logradouro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '',
+      endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '',
       tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
     }); 
     setIsModalOpen(true); 
@@ -211,7 +299,7 @@ export default function Users() {
       setFormData({ 
         nome: userToEdit.nome || '', email: userToEdit.email || '', papel: userToEdit.papel || userToEdit.role || 'PROFISSIONAL', status: userToEdit.status || 'ATIVO', 
         cpf: userToEdit.cpf || '', telefone: userToEdit.telefone || '', telefone_contato: userToEdit.telefone_contato || '',
-        endereco_logradouro: userToEdit.endereco_logradouro || '', endereco_cidade: userToEdit.endereco_cidade || '',
+        endereco_cep: userToEdit.endereco_cep || '', endereco_logradouro: userToEdit.endereco_logradouro || '', endereco_numero: userToEdit.endereco_numero || '', endereco_bairro: userToEdit.endereco_bairro || '', endereco_cidade: userToEdit.endereco_cidade || '',
         endereco_estado: userToEdit.endereco_estado || '', endereco_regiao: userToEdit.endereco_regiao || '', observacoes: userToEdit.observacoes || '',
         senha: '', tenant_id: userToEdit.tenant_id 
       });
@@ -225,7 +313,7 @@ export default function Users() {
     } else if (selectedUsers.length > 1) {
       setModalMode('batch-edit'); setBatchToggles({ papel: false, status: false, endereco_cidade: false, endereco_estado: false }); 
       setFormData({ 
-        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_logradouro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
+        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
       }); 
       setIsModalOpen(true);
     }
@@ -237,8 +325,6 @@ export default function Users() {
       const payload = { ...formData };
       if (modalMode === 'edit') delete payload.senha; 
 
-      // 🛑 O FILTRO DE SANITIZAÇÃO (A MÁGICA ACONTECE AQUI)
-      // Transforma strings vazias "" em null, burlando as restrições de min_length do Pydantic
       Object.keys(payload).forEach(key => {
         if (payload[key] === '') {
           payload[key] = null;
@@ -283,6 +369,62 @@ export default function Users() {
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
+        <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Agenda do Profissional: ${selectedHistoryUser?.nome}`}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">A partir de</label>
+                        <input type="date" className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataInicio} onChange={e => setHistoryFilters({...historyFilters, dataInicio: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Até o dia</label>
+                        <input type="date" className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataFim} onChange={e => setHistoryFilters({...historyFilters, dataFim: e.target.value})} />
+                    </div>
+                </div>
+                <button onClick={handleExportHistoryCSV} disabled={filteredHistory.length === 0} className="flex items-center gap-2 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-slate-300 shadow-sm mt-4">
+                    <Download className="w-4 h-4" /> Exportar Lista
+                </button>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[50vh] overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-wider sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">Data e Hora</th>
+                    <th className="px-4 py-3 font-bold">Status</th>
+                    <th className="px-4 py-3 font-bold">Cliente</th>
+                    <th className="px-4 py-3 font-bold">Observações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {isHistoryLoading ? (
+                      <tr><td colSpan="4" className="text-center py-10"><Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" /></td></tr>
+                  ) : filteredHistory.length === 0 ? (
+                      <tr><td colSpan="4" className="text-center py-10 text-slate-400 font-medium">Nenhum agendamento encontrado no período.</td></tr>
+                  ) : (
+                    filteredHistory.map(app => {
+                        const custName = customers.find(c => c.id === app.customer_id)?.nome || 'Cliente';
+                        return (
+                          <tr key={app.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 font-bold text-slate-700 whitespace-nowrap">{new Date(app.data_hora_inicio).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
+                            <td className="px-4 py-3">
+                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase shadow-sm border whitespace-nowrap" style={getSolidStatusStyle(app.status)}>
+                                    {app.status ? String(app.status).replace(/_/g, ' ') : 'N/A'}
+                                </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{custName}</td>
+                            <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[200px]" title={app.observacoes_internas}>{app.observacoes_internas || '-'}</td>
+                          </tr>
+                        )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
+
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}>
           <form onSubmit={handleSaveUser} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
@@ -297,31 +439,53 @@ export default function Users() {
               <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
                 <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Informações Básicas</legend>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label><input required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label><input required disabled={modalMode === 'edit'} type="email" className={`w-full px-4 py-2 border border-gray-300 rounded-lg outline-none ${modalMode === 'edit' ? 'bg-gray-100 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500'}`} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">CPF</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="000.000.000-00" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} /></div>
-                  {modalMode === 'create' && (<div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Senha de Acesso</label><input required type="password" minLength={8} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} /></div>)}
+                  <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label><input required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.nome || ''} onChange={e => setFormData({...formData, nome: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label><input required disabled={modalMode === 'edit'} type="email" className={`w-full px-4 py-2 border border-gray-300 rounded-lg outline-none ${modalMode === 'edit' ? 'bg-gray-100 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500'}`} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">CPF</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="000.000.000-00" value={formData.cpf || ''} onChange={e => setFormData({...formData, cpf: e.target.value})} /></div>
+                  {modalMode === 'create' && (<div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Senha de Acesso</label><input required type="password" minLength={8} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.senha || ''} onChange={e => setFormData({...formData, senha: e.target.value})} /></div>)}
                 </div>
               </fieldset>
             )}
 
             {modalMode !== 'batch-edit' && (
-              <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
-                <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Contato & Endereço</legend>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone Principal</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="(00) 00000-0000" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone Recado/Contato</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="(00) 00000-0000" value={formData.telefone_contato} onChange={e => setFormData({...formData, telefone_contato: e.target.value})} /></div>
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Logradouro (Rua, Número, Complemento)</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_logradouro} onChange={e => setFormData({...formData, endereco_logradouro: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_cidade} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} /></div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" maxLength={2} placeholder="SP" value={formData.endereco_estado} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Região</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_regiao} onChange={e => setFormData({...formData, endereco_regiao: e.target.value})} /></div>
+              <>
+                <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50 mt-4">
+                  <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Telefones</legend>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone Principal</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="(00) 00000-0000" value={formData.telefone || ''} onChange={e => setFormData({...formData, telefone: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone Recado/Contato</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="(00) 00000-0000" value={formData.telefone_contato || ''} onChange={e => setFormData({...formData, telefone_contato: e.target.value})} /></div>
                   </div>
-                </div>
-              </fieldset>
+                </fieldset>
+
+                <fieldset className="border border-blue-200 p-4 rounded-xl bg-blue-50/30 mt-4 shadow-sm">
+                  <legend className="text-sm font-bold text-blue-700 px-2 uppercase tracking-wider flex items-center gap-2"><MapPin className="w-4 h-4" /> Endereço & Localização</legend>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                    
+                    {/* Linha 1: Apenas o CEP */}
+                    <div className="relative md:col-span-1">
+                        <label className="block text-xs font-bold text-gray-700 mb-1">CEP</label>
+                        <input className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold" placeholder="00000-000" value={formData.endereco_cep || ''} onChange={e => handleCEPLookup(e.target.value)} />
+                        {isCheckingCEP && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-8 text-blue-500" />}
+                    </div>
+                    <div className="hidden md:block md:col-span-2"></div> {/* Espaçador invisível para forçar a quebra de linha */}
+
+                    {/* Linha 2: Logradouro + Número ocupando as 3 colunas */}
+                    <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Logradouro (Rua, Av)</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500" value={formData.endereco_logradouro || ''} onChange={e => setFormData({...formData, endereco_logradouro: e.target.value})} /></div>
+                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Número</label><input className="w-full px-4 py-2 border border-blue-400 shadow-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_numero || ''} onChange={e => setFormData({...formData, endereco_numero: e.target.value})} /></div>
+                    
+                    {/* Linha 3: Bairro, Cidade, UF e Região */}
+                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Bairro</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500" value={formData.endereco_bairro || ''} onChange={e => setFormData({...formData, endereco_bairro: e.target.value})} /></div>
+                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Cidade</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500" value={formData.endereco_cidade || ''} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} /></div>
+                    <div className="md:col-span-1 grid grid-cols-2 gap-2">
+                        <div><label className="block text-xs font-bold text-gray-700 mb-1">UF</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500 text-center" maxLength={2} value={formData.endereco_estado || ''} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} /></div>
+                        <div><label className="block text-xs font-bold text-gray-700 mb-1">Região</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_regiao || ''} onChange={e => setFormData({...formData, endereco_regiao: e.target.value})} /></div>
+                    </div>
+                  </div>
+                </fieldset>
+              </>
             )}
 
-            <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
+            <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50 mt-4">
               <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Configurações de Acesso</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <div className={`p-3 rounded-lg border ${modalMode === 'batch-edit' && !batchToggles.papel ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
@@ -344,9 +508,9 @@ export default function Users() {
             </fieldset>
 
             {modalMode !== 'batch-edit' && (
-              <div>
+              <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Observações Internas</label>
-                <textarea rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Anotações sobre este usuário..." value={formData.observacoes} onChange={e => setFormData({...formData, observacoes: e.target.value})} />
+                <textarea rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Anotações sobre este usuário..." value={formData.observacoes || ''} onChange={e => setFormData({...formData, observacoes: e.target.value})} />
               </div>
             )}
 
@@ -367,7 +531,7 @@ export default function Users() {
 
             <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t mt-4 border-gray-100 flex gap-3">
               <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button type="submit" disabled={isSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg flex justify-center items-center gap-2 font-bold hover:bg-blue-700 transition-colors">
+              <button type="submit" disabled={isSaving || isCheckingCEP} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg flex justify-center items-center gap-2 font-bold hover:bg-blue-700 transition-colors">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />} 
                 {modalMode === 'create' ? 'Salvar Novo Usuário' : modalMode === 'edit' ? 'Salvar Alterações' : 'Aplicar em Lote'}
               </button>
@@ -493,6 +657,7 @@ export default function Users() {
               <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm uppercase sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-4 w-12"><input type="checkbox" onChange={e => e.target.checked ? setSelectedUsers(paginatedUsers.map(u => u.id)) : setSelectedUsers([])} checked={selectedUsers.length > 0 && selectedUsers.length === paginatedUsers.length} /></th>
+                  <th className="px-4 py-4 w-20 text-center font-semibold tracking-wider">Ações</th>
                   {Object.keys(visibleColumns).map(col => visibleColumns[col] && <th key={col} className="px-6 py-4 capitalize font-semibold tracking-wider whitespace-nowrap">{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</th>)}
                 </tr>
               </thead>
@@ -501,8 +666,15 @@ export default function Users() {
                    <tr><td colSpan={15} className="px-6 py-12 text-center text-gray-500 font-medium">Nenhum registro encontrado.</td></tr>
                 ) : (
                   paginatedUsers.map((user) => (
-                    <tr key={user.id} className={`hover:bg-blue-50/50 transition-colors ${selectedUsers.includes(user.id) ? 'bg-blue-50' : ''}`}>
+                    <tr key={user.id} className={`hover:bg-blue-50/50 transition-colors group ${selectedUsers.includes(user.id) ? 'bg-blue-50' : ''}`}>
                       <td className="px-6 py-4"><input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => setSelectedUsers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
+                      
+                      <td className="px-4 py-4 text-center">
+                          <button onClick={() => openHistoryModal(user)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-transparent shadow-sm hover:border-blue-200" title="Ver Agenda">
+                              <CalendarDays className="w-4 h-4" />
+                          </button>
+                      </td>
+
                       {visibleColumns.id && <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>}
                       {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>}
                       {visibleColumns.email && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>}
