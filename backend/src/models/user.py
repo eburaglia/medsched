@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from src.database import Base
 from src.models.base import AuditoriaMixin
@@ -29,7 +29,6 @@ class User(AuditoriaMixin, Base):
     telefone_contato = Column(String(20), nullable=True)
     observacoes = Column(Text, nullable=True)
 
-    # Campos de Endereço (Novos ou Restaurados)
     endereco_cep = Column(String(20), nullable=True)
     endereco_logradouro = Column(String(255), nullable=True)
     endereco_numero = Column(String(50), nullable=True)
@@ -37,6 +36,9 @@ class User(AuditoriaMixin, Base):
     endereco_cidade = Column(String(100), nullable=True)
     endereco_estado = Column(String(2), nullable=True)
     endereco_regiao = Column(String(50), nullable=True)
+
+    # NOVO: O campo flexível para salvar o visual da tela
+    preferencias_ui = Column(JSONB, nullable=True)
 
     senha_hash = Column(String(255), nullable=False)
     recuperacao_token = Column(String(100), nullable=True, index=True)

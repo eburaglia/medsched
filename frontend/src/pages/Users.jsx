@@ -6,14 +6,15 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, Lock, MapPin
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, MapPin, ChevronUp, ChevronDown
 } from 'lucide-react';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
-  const [customers, setCustomers] = useState([]); 
+  const [customers, setCustomers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [currentUserId, setCurrentUserId] = useState(null);
   
   const [showPerfDetails, setShowPerfDetails] = useState(false);
   const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 });
@@ -32,6 +33,30 @@ export default function Users() {
   
   const [batchToggles, setBatchToggles] = useState({ papel: false, status: false, endereco_cidade: false, endereco_estado: false });
 
+  // ---------------------------------------------------------
+  // COLUNAS PADRÃO E ESTADO
+  // ---------------------------------------------------------
+  const defaultColumns = [
+    { id: 'id', label: 'ID', visible: false },
+    { id: 'nome', label: 'Nome', visible: true },
+    { id: 'email', label: 'Email', visible: true },
+    { id: 'papel', label: 'Papel', visible: true },
+    { id: 'telefone', label: 'Telefone', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'cpf', label: 'CPF', visible: false },
+    { id: 'telefone_contato', label: 'Contato', visible: false },
+    { id: 'endereco_cidade', label: 'Cidade', visible: false },
+    { id: 'endereco_estado', label: 'UF', visible: false },
+    { id: 'criado_em', label: 'Criado em', visible: false },
+    { id: 'criado_por', label: 'Criado por', visible: false },
+    { id: 'alterado_em', label: 'Alterado em', visible: false },
+    { id: 'alterado_por', label: 'Alterado por', visible: false },
+    { id: 'deletado_em', label: 'Inativado em', visible: false },
+    { id: 'deletado_por', label: 'Inativado por', visible: false }
+  ];
+
+  const [columns, setColumns] = useState(defaultColumns);
+
   const [formData, setFormData] = useState({ 
     nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', tenant_id: '',
     cpf: '', telefone: '', telefone_contato: '', 
@@ -40,17 +65,6 @@ export default function Users() {
   });
 
   const [editingAuditData, setEditingAuditData] = useState(null);
-
-  const [visibleColumns, setVisibleColumns] = useState({ 
-    id: false,
-    nome: true, email: true, role: true, telefone: true, status: true, 
-    cpf: false, telefone_contato: false, endereco_cidade: false, endereco_estado: false, 
-    criado_em: false, criado_por: false, 
-    alterado_em: false, alterado_por: false,
-    deletado_em: false, deletado_por: false
-  });
-  
-  const [currentUserId, setCurrentUserId] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -61,6 +75,44 @@ export default function Users() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
 
+  // ---------------------------------------------------------
+  // SALVAR E LER PREFERÊNCIAS NO BANCO
+  // ---------------------------------------------------------
+  const savePreferences = async (newColumns) => {
+    try {
+      const token = localStorage.getItem('medsched_token');
+      const decoded = jwtDecode(token);
+      const userRes = await api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } });
+      const currentPrefs = userRes.data.preferencias_ui || {};
+      
+      const updatedPrefs = {
+        ...currentPrefs,
+        tabelas: {
+          ...(currentPrefs.tabelas || {}),
+          users: newColumns.map(c => ({ id: c.id, visible: c.visible }))
+        }
+      };
+      await api.put(`/users/${decoded.sub}`, { preferencias_ui: updatedPrefs }, { params: { tenant_id: decoded.tenant_id } });
+    } catch (err) {
+      console.error("Erro ao salvar preferências:", err);
+    }
+  };
+
+  const toggleColumn = (id) => {
+    const newCols = columns.map(c => c.id === id ? { ...c, visible: !c.visible } : c);
+    setColumns(newCols);
+    savePreferences(newCols);
+  };
+
+  const moveColumn = (index, direction) => {
+    const newCols = [...columns];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= newCols.length) return;
+    [newCols[index], newCols[targetIndex]] = [newCols[targetIndex], newCols[index]];
+    setColumns(newCols);
+    savePreferences(newCols);
+  };
+
   const fetchUsers = async () => {
     const startTime = performance.now();
     try {
@@ -69,27 +121,28 @@ export default function Users() {
       const decoded = jwtDecode(token);
       setCurrentUserId(decoded.sub);
       
-      const [resUsers, resCust] = await Promise.all([
+      const [resUsers, resCust, resMe] = await Promise.all([
           api.get('/users/', { params: { tenant_id: decoded.tenant_id } }),
-          api.get('/customers/', { params: { tenant_id: decoded.tenant_id } })
+          api.get('/customers/', { params: { tenant_id: decoded.tenant_id } }),
+          api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } })
       ]);
       const endTime = performance.now(); 
       
       setUsers(resUsers.data);
       setCustomers(resCust.data);
 
-      if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
-      
-      requestAnimationFrame(() => {
-        const renderTime = performance.now();
-        const apiTotal = Math.round(endTime - startTime);
-        const serverEstimate = Math.round(apiTotal * 0.35);
-        const networkEstimate = apiTotal - serverEstimate;
-        const browserEstimate = Math.round(renderTime - endTime);
-        
-        setPerfMetrics({ server: serverEstimate, network: networkEstimate, browser: browserEstimate, api: apiTotal, total: apiTotal + browserEstimate });
-      });
+      if (resMe.data.preferencias_ui?.tabelas?.users) {
+        const saved = resMe.data.preferencias_ui.tabelas.users;
+        const reordered = saved.map(s => {
+          const original = defaultColumns.find(c => c.id === s.id);
+          return original ? { ...original, visible: s.visible } : null;
+        }).filter(Boolean);
+        const news = defaultColumns.filter(c => !saved.find(s => s.id === c.id));
+        setColumns([...reordered, ...news]);
+      }
 
+      if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
+      setPerfMetrics(p => ({ ...p, total: Math.round(endTime - startTime) }));
     } catch (err) {
       setError("Falha ao carregar usuários.");
     } finally {
@@ -120,11 +173,7 @@ export default function Users() {
           endereco_estado: data.uf || ''
         }));
         toast.success("Endereço localizado com sucesso!");
-      } catch (err) {
-        toast.error("CEP não encontrado.");
-      } finally {
-        setIsCheckingCEP(false);
-      }
+      } catch (err) { toast.error("CEP não encontrado."); } finally { setIsCheckingCEP(false); }
     }
   };
 
@@ -138,11 +187,7 @@ export default function Users() {
           const res = await api.get('/appointments/', { params: { tenant_id: tenantId } });
           const myApps = res.data.filter(app => app.profissional_id === user.id).sort((a,b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
           setUserAppointments(myApps);
-      } catch (err) {
-          toast.error("Erro ao carregar a agenda do profissional.");
-      } finally {
-          setIsHistoryLoading(false);
-      }
+      } catch (err) { toast.error("Erro ao carregar a agenda."); } finally { setIsHistoryLoading(false); }
   };
 
   const filteredHistory = useMemo(() => {
@@ -185,6 +230,113 @@ export default function Users() {
     }
   };
 
+  const handleOpenCreate = () => { 
+    setShowAddMenu(false); 
+    setModalMode('create'); 
+    setEditingAuditData(null);
+    setFormData({ 
+      nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', 
+      cpf: '', telefone: '', telefone_contato: '', 
+      endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '',
+      tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
+    }); 
+    setIsModalOpen(true); 
+  };
+
+  const handleOpenEdit = () => {
+    if (selectedUsers.length === 1) {
+      const userToEdit = users.find(u => u.id === selectedUsers[0]);
+      setFormData({ 
+        nome: userToEdit.nome || '', email: userToEdit.email || '', papel: userToEdit.papel || userToEdit.role || 'PROFISSIONAL', status: userToEdit.status || 'ATIVO', 
+        cpf: userToEdit.cpf || '', telefone: userToEdit.telefone || '', telefone_contato: userToEdit.telefone_contato || '',
+        endereco_cep: userToEdit.endereco_cep || '', endereco_logradouro: userToEdit.endereco_logradouro || '', endereco_numero: userToEdit.endereco_numero || '', endereco_bairro: userToEdit.endereco_bairro || '', endereco_cidade: userToEdit.endereco_cidade || '',
+        endereco_estado: userToEdit.endereco_estado || '', endereco_regiao: userToEdit.endereco_regiao || '', observacoes: userToEdit.observacoes || '',
+        senha: '', tenant_id: userToEdit.tenant_id 
+      });
+      setEditingAuditData({
+        id: userToEdit.id,
+        criado_em: userToEdit.criado_em, criado_por: userToEdit.criado_por,
+        alterado_em: userToEdit.alterado_em, alterado_por: userToEdit.alterado_por,
+        deletado_em: userToEdit.deletado_em, deletado_por: userToEdit.deletado_por
+      });
+      setModalMode('edit'); setIsModalOpen(true);
+    } else if (selectedUsers.length > 1) {
+      setModalMode('batch-edit'); setBatchToggles({ papel: false, status: false, endereco_cidade: false, endereco_estado: false }); 
+      setFormData({ 
+        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
+      }); 
+      setIsModalOpen(true);
+    }
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = selectedUsers.length > 0 ? users.filter(u => selectedUsers.includes(u.id)) : filteredUsers;
+    if (dataToExport.length === 0) return toast.error("Nenhum dado para exportar.");
+    const headers = columns.filter(c => c.visible).map(c => c.id);
+    const csvRows = [headers.join(',')];
+    for (const row of dataToExport) {
+      const values = headers.map(header => `"${String(row[header === 'role' ? 'papel' : header] || row[header] || '').replace(/"/g, '""')}"`);
+      csvRows.push(values.join(','));
+    }
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `medsched_usuarios_${new Date().getTime()}.csv`;
+    link.click();
+    toast.success(`${dataToExport.length} registros exportados!`);
+  };
+
+  const handleQuickInactivate = async () => {
+    const count = selectedUsers.length;
+    if (count === 0) return;
+    if (!window.confirm(`Deseja inativar ${count} usuário(s)?`)) return;
+    const loadingToast = toast.loading("Processando...");
+    try {
+      for (const userId of selectedUsers) {
+        if (userId === currentUserId) continue;
+        await api.put(`/users/${userId}`, { status: "INATIVO" }, { params: { tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id } });
+      }
+      toast.success("Operação concluída.", { id: loadingToast });
+      setSelectedUsers([]);
+      fetchUsers();
+    } catch (err) { toast.error("Erro na inativação.", { id: loadingToast }); }
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault(); setIsSaving(true);
+    try {
+      const payload = { ...formData };
+      if (modalMode === 'edit') delete payload.senha; 
+      Object.keys(payload).forEach(key => { if (payload[key] === '') payload[key] = null; });
+
+      if (modalMode === 'create') { 
+        await api.post('/users/', payload); 
+        toast.success("Usuário criado com sucesso!"); 
+      } 
+      else if (modalMode === 'edit') { 
+        await api.put(`/users/${selectedUsers[0]}`, payload, { params: { tenant_id: formData.tenant_id } }); 
+        toast.success("Usuário atualizado!"); 
+        setSelectedUsers([]); 
+      } 
+      else if (modalMode === 'batch-edit') {
+        const batchPayload = {}; 
+        if (batchToggles.papel) batchPayload.papel = formData.papel; 
+        if (batchToggles.status) batchPayload.status = formData.status;
+        if (batchToggles.endereco_cidade) batchPayload.endereco_cidade = formData.endereco_cidade ? formData.endereco_cidade : null;
+        if (batchToggles.endereco_estado) batchPayload.endereco_estado = formData.endereco_estado ? formData.endereco_estado : null;
+
+        if (Object.keys(batchPayload).length === 0) { toast.error("Selecione pelo menos um campo para alterar."); setIsSaving(false); return; }
+        
+        const loadingToast = toast.loading(`Atualizando ${selectedUsers.length} registros...`);
+        for (const userId of selectedUsers) { await api.put(`/users/${userId}`, batchPayload, { params: { tenant_id: formData.tenant_id } }); }
+        toast.success("Edição em lote concluída!", { id: loadingToast }); setSelectedUsers([]);
+      }
+      setIsModalOpen(false); fetchUsers(); 
+    } catch (err) { 
+      toast.error(err.response?.data?.detail || "Erro ao salvar. Verifique os dados."); 
+    } finally { setIsSaving(false); }
+  };
+
   const filteredUsers = useMemo(() => {
     let result = users;
     if (searchTerm) {
@@ -192,8 +344,7 @@ export default function Users() {
       result = result.filter(u => 
         (u.nome && u.nome.toLowerCase().includes(lowerSearch)) || 
         (u.email && u.email.toLowerCase().includes(lowerSearch)) ||
-        (u.cpf && u.cpf.includes(lowerSearch)) ||
-        (u.id && u.id.toLowerCase().includes(lowerSearch))
+        (u.cpf && u.cpf.includes(lowerSearch))
       );
     }
     const activeGroups = queryBuilder.groups.filter(g => g.rules.some(r => r.column && r.operator && r.value !== ''));
@@ -240,198 +391,60 @@ export default function Users() {
   const updateRule = (groupId, ruleId, field, value) => setQueryBuilder(prev => ({ ...prev, groups: prev.groups.map(g => { if (g.id === groupId) return { ...g, rules: g.rules.map(r => r.id === ruleId ? { ...r, [field]: value } : r) }; return g; }) }));
   const clearFilters = () => { setQueryBuilder({ rootLogic: 'AND', groups: [] }); setShowFilters(false); };
 
-  const handleExportCSV = () => {
-    const dataToExport = selectedUsers.length > 0 ? users.filter(u => selectedUsers.includes(u.id)) : filteredUsers;
-    if (dataToExport.length === 0) return toast.error("Nenhum dado para exportar.");
-    const headers = Object.keys(visibleColumns).filter(key => visibleColumns[key]);
-    const csvRows = [headers.join(',')];
-    for (const row of dataToExport) {
-      const values = headers.map(header => `"${String(row[header === 'role' ? 'papel' : header] || row[header] || '').replace(/"/g, '""')}"`);
-      csvRows.push(values.join(','));
-    }
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    const now = new Date();
-    const ano = now.getFullYear();
-    const mes = String(now.getMonth() + 1).padStart(2, '0');
-    const dia = String(now.getDate()).padStart(2, '0');
-    const hora = String(now.getHours()).padStart(2, '0');
-    const minuto = String(now.getMinutes()).padStart(2, '0');
-    const segundo = String(now.getSeconds()).padStart(2, '0');
-    link.download = `medsched_usuarios_${ano}${mes}${dia}_${hora}${minuto}${segundo}.csv`;
-    link.click();
-    toast.success(`${dataToExport.length} registros exportados!`);
-  };
-
-  const handleQuickInactivate = async () => {
-    const count = selectedUsers.length;
-    if (count === 0) return;
-    if (!window.confirm(`Deseja inativar ${count} usuário(s)?`)) return;
-    const loadingToast = toast.loading("Processando...");
-    try {
-      for (const userId of selectedUsers) {
-        if (userId === currentUserId) continue;
-        await api.put(`/users/${userId}`, { status: "INATIVO" }, { params: { tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id } });
-      }
-      toast.success("Operação concluída.", { id: loadingToast });
-      setSelectedUsers([]);
-      fetchUsers();
-    } catch (err) { toast.error("Erro na inativação.", { id: loadingToast }); }
-  };
-
-  const handleOpenCreate = () => { 
-    setShowAddMenu(false); 
-    setModalMode('create'); 
-    setEditingAuditData(null);
-    setFormData({ 
-      nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', 
-      cpf: '', telefone: '', telefone_contato: '', 
-      endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '',
-      tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
-    }); 
-    setIsModalOpen(true); 
-  };
-
-  const handleOpenEdit = () => {
-    if (selectedUsers.length === 1) {
-      const userToEdit = users.find(u => u.id === selectedUsers[0]);
-      setFormData({ 
-        nome: userToEdit.nome || '', email: userToEdit.email || '', papel: userToEdit.papel || userToEdit.role || 'PROFISSIONAL', status: userToEdit.status || 'ATIVO', 
-        cpf: userToEdit.cpf || '', telefone: userToEdit.telefone || '', telefone_contato: userToEdit.telefone_contato || '',
-        endereco_cep: userToEdit.endereco_cep || '', endereco_logradouro: userToEdit.endereco_logradouro || '', endereco_numero: userToEdit.endereco_numero || '', endereco_bairro: userToEdit.endereco_bairro || '', endereco_cidade: userToEdit.endereco_cidade || '',
-        endereco_estado: userToEdit.endereco_estado || '', endereco_regiao: userToEdit.endereco_regiao || '', observacoes: userToEdit.observacoes || '',
-        senha: '', tenant_id: userToEdit.tenant_id 
-      });
-      setEditingAuditData({
-        id: userToEdit.id,
-        criado_em: userToEdit.criado_em, criado_por: userToEdit.criado_por,
-        alterado_em: userToEdit.alterado_em, alterado_por: userToEdit.alterado_por,
-        deletado_em: userToEdit.deletado_em, deletado_por: userToEdit.deletado_por
-      });
-      setModalMode('edit'); setIsModalOpen(true);
-    } else if (selectedUsers.length > 1) {
-      setModalMode('batch-edit'); setBatchToggles({ papel: false, status: false, endereco_cidade: false, endereco_estado: false }); 
-      setFormData({ 
-        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
-      }); 
-      setIsModalOpen(true);
-    }
-  };
-
-  const handleSaveUser = async (e) => {
-    e.preventDefault(); setIsSaving(true);
-    try {
-      const payload = { ...formData };
-      if (modalMode === 'edit') delete payload.senha; 
-
-      Object.keys(payload).forEach(key => {
-        if (payload[key] === '') {
-          payload[key] = null;
-        }
-      });
-
-      if (modalMode === 'create') { 
-        await api.post('/users/', payload); 
-        toast.success("Usuário criado com sucesso!"); 
-      } 
-      else if (modalMode === 'edit') { 
-        await api.put(`/users/${selectedUsers[0]}`, payload, { params: { tenant_id: formData.tenant_id } }); 
-        toast.success("Usuário atualizado!"); 
-        setSelectedUsers([]); 
-      } 
-      else if (modalMode === 'batch-edit') {
-        const batchPayload = {}; 
-        if (batchToggles.papel) batchPayload.papel = formData.papel; 
-        if (batchToggles.status) batchPayload.status = formData.status;
-        if (batchToggles.endereco_cidade) batchPayload.endereco_cidade = formData.endereco_cidade ? formData.endereco_cidade : null;
-        if (batchToggles.endereco_estado) batchPayload.endereco_estado = formData.endereco_estado ? formData.endereco_estado : null;
-
-        if (Object.keys(batchPayload).length === 0) { toast.error("Selecione pelo menos um campo para alterar."); setIsSaving(false); return; }
-        
-        const loadingToast = toast.loading(`Atualizando ${selectedUsers.length} registros...`);
-        for (const userId of selectedUsers) { await api.put(`/users/${userId}`, batchPayload, { params: { tenant_id: formData.tenant_id } }); }
-        toast.success("Edição em lote concluída!", { id: loadingToast }); setSelectedUsers([]);
-      }
-      setIsModalOpen(false); fetchUsers(); 
-    } catch (err) { 
-      toast.error("Erro ao salvar. Verifique os dados."); 
-    } finally { setIsSaving(false); }
-  };
-
-  const toggleColumn = (colName) => setVisibleColumns(prev => ({ ...prev, [colName]: !prev[colName] }));
   const totalActiveRules = queryBuilder.groups.reduce((acc, g) => acc + g.rules.filter(r => r.value).length, 0);
-
   const formatDate = (isoString) => isoString ? new Date(isoString).toLocaleString('pt-BR') : '-';
+
+  // ---------------------------------------------------------
+  // MÁGICA: TRADUZ O UUID PARA O NOME DA PESSOA
+  // ---------------------------------------------------------
+  const getUserNameById = (id) => {
+      if (!id) return '-';
+      const found = users.find(u => u.id === id);
+      return found ? found.nome : 'Sistema/Deletado';
+  };
 
   return (
     <Layout>
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
-        <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Agenda do Profissional: ${selectedHistoryUser?.nome}`}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div className="flex items-center gap-4">
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">A partir de</label>
-                        <input type="date" className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataInicio} onChange={e => setHistoryFilters({...historyFilters, dataInicio: e.target.value})} />
+        {/* MODAL AGENDA */}
+        <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Agenda: ${selectedHistoryUser?.nome}`}>
+            <div className="flex flex-col gap-4">
+                <div className="flex justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div className="flex gap-2">
+                        <input type="date" className="border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataInicio} onChange={e => setHistoryFilters({...historyFilters, dataInicio: e.target.value})} />
+                        <input type="date" className="border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataFim} onChange={e => setHistoryFilters({...historyFilters, dataFim: e.target.value})} />
                     </div>
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Até o dia</label>
-                        <input type="date" className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.dataFim} onChange={e => setHistoryFilters({...historyFilters, dataFim: e.target.value})} />
-                    </div>
+                    <button onClick={handleExportHistoryCSV} className="bg-white hover:bg-slate-50 border border-slate-300 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 text-slate-700 shadow-sm"><Download className="w-4 h-4" /> CSV</button>
                 </div>
-                <button onClick={handleExportHistoryCSV} disabled={filteredHistory.length === 0} className="flex items-center gap-2 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-slate-300 shadow-sm mt-4">
-                    <Download className="w-4 h-4" /> Exportar Lista
-                </button>
+                <div className="border border-slate-200 rounded-xl overflow-auto max-h-[50vh]">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
+                            <tr><th className="px-4 py-3">Data e Hora</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Cliente</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                            {userAppointments.map(app => (
+                                <tr key={app.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-4 py-3 font-bold text-slate-700">{new Date(app.data_hora_inicio).toLocaleString('pt-BR')}</td>
+                                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-bold border uppercase whitespace-nowrap shadow-sm" style={getSolidStatusStyle(app.status)}>{app.status}</span></td>
+                                    <td className="px-4 py-3 text-slate-600 font-medium">{customers.find(c => c.id === app.customer_id)?.nome}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[50vh] overflow-y-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-wider sticky top-0 z-10 shadow-sm">
-                  <tr>
-                    <th className="px-4 py-3 font-bold">Data e Hora</th>
-                    <th className="px-4 py-3 font-bold">Status</th>
-                    <th className="px-4 py-3 font-bold">Cliente</th>
-                    <th className="px-4 py-3 font-bold">Observações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {isHistoryLoading ? (
-                      <tr><td colSpan="4" className="text-center py-10"><Loader2 className="w-6 h-6 animate-spin text-blue-500 mx-auto" /></td></tr>
-                  ) : filteredHistory.length === 0 ? (
-                      <tr><td colSpan="4" className="text-center py-10 text-slate-400 font-medium">Nenhum agendamento encontrado no período.</td></tr>
-                  ) : (
-                    filteredHistory.map(app => {
-                        const custName = customers.find(c => c.id === app.customer_id)?.nome || 'Cliente';
-                        return (
-                          <tr key={app.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3 font-bold text-slate-700 whitespace-nowrap">{new Date(app.data_hora_inicio).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
-                            <td className="px-4 py-3">
-                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase shadow-sm border whitespace-nowrap" style={getSolidStatusStyle(app.status)}>
-                                    {app.status ? String(app.status).replace(/_/g, ' ') : 'N/A'}
-                                </span>
-                            </td>
-                            <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{custName}</td>
-                            <td className="px-4 py-3 text-slate-500 text-xs truncate max-w-[200px]" title={app.observacoes_internas}>{app.observacoes_internas || '-'}</td>
-                          </tr>
-                        )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </Modal>
 
+        {/* MODAL CADASTRO/EDIÇÃO */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}>
           <form onSubmit={handleSaveUser} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
             {modalMode === 'batch-edit' && (
               <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-800 flex items-start gap-2">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <p>Você está editando <strong>{selectedUsers.length} usuários</strong> simultaneamente. Marque apenas os campos que deseja sobrescrever em todos eles.</p>
+                <p>Você está editando <strong>{selectedUsers.length} usuários</strong> simultaneamente. Marque apenas os campos que deseja sobrescrever.</p>
               </div>
             )}
 
@@ -460,25 +473,21 @@ export default function Users() {
                 <fieldset className="border border-blue-200 p-4 rounded-xl bg-blue-50/30 mt-4 shadow-sm">
                   <legend className="text-sm font-bold text-blue-700 px-2 uppercase tracking-wider flex items-center gap-2"><MapPin className="w-4 h-4" /> Endereço & Localização</legend>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                    
-                    {/* Linha 1: Apenas o CEP */}
                     <div className="relative md:col-span-1">
                         <label className="block text-xs font-bold text-gray-700 mb-1">CEP</label>
-                        <input className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold" placeholder="00000-000" value={formData.endereco_cep || ''} onChange={e => handleCEPLookup(e.target.value)} />
+                        <input className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold bg-white" placeholder="00000-000" value={formData.endereco_cep || ''} onChange={e => handleCEPLookup(e.target.value)} />
                         {isCheckingCEP && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-8 text-blue-500" />}
                     </div>
-                    <div className="hidden md:block md:col-span-2"></div> {/* Espaçador invisível para forçar a quebra de linha */}
+                    <div className="hidden md:block md:col-span-2"></div> 
 
-                    {/* Linha 2: Logradouro + Número ocupando as 3 colunas */}
-                    <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Logradouro (Rua, Av)</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500" value={formData.endereco_logradouro || ''} onChange={e => setFormData({...formData, endereco_logradouro: e.target.value})} /></div>
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Número</label><input className="w-full px-4 py-2 border border-blue-400 shadow-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_numero || ''} onChange={e => setFormData({...formData, endereco_numero: e.target.value})} /></div>
+                    <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Logradouro (Rua, Av)</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500 cursor-not-allowed" value={formData.endereco_logradouro || ''} /></div>
+                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Número</label><input className="w-full px-4 py-2 border border-blue-400 shadow-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={formData.endereco_numero || ''} onChange={e => setFormData({...formData, endereco_numero: e.target.value})} /></div>
                     
-                    {/* Linha 3: Bairro, Cidade, UF e Região */}
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Bairro</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500" value={formData.endereco_bairro || ''} onChange={e => setFormData({...formData, endereco_bairro: e.target.value})} /></div>
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Cidade</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500" value={formData.endereco_cidade || ''} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} /></div>
+                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Bairro</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500 cursor-not-allowed" value={formData.endereco_bairro || ''} /></div>
+                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Cidade</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500 cursor-not-allowed" value={formData.endereco_cidade || ''} /></div>
                     <div className="md:col-span-1 grid grid-cols-2 gap-2">
-                        <div><label className="block text-xs font-bold text-gray-700 mb-1">UF</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500 text-center" maxLength={2} value={formData.endereco_estado || ''} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} /></div>
-                        <div><label className="block text-xs font-bold text-gray-700 mb-1">Região</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_regiao || ''} onChange={e => setFormData({...formData, endereco_regiao: e.target.value})} /></div>
+                        <div><label className="block text-xs font-bold text-gray-700 mb-1">UF</label><input readOnly className="w-full px-4 py-2 border border-gray-300 bg-gray-100 rounded-lg text-gray-500 text-center cursor-not-allowed" maxLength={2} value={formData.endereco_estado || ''} /></div>
+                        <div><label className="block text-xs font-bold text-gray-700 mb-1">Região</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={formData.endereco_regiao || ''} onChange={e => setFormData({...formData, endereco_regiao: e.target.value})} /></div>
                     </div>
                   </div>
                 </fieldset>
@@ -498,12 +507,6 @@ export default function Users() {
                     <select disabled={modalMode === 'batch-edit' && !batchToggles.status} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}><option value="ATIVO">Ativo</option><option value="PENDENTE">Pendente</option><option value="INATIVO">Inativo</option></select>
                   </div>
                 )}
-                {modalMode === 'batch-edit' && (
-                  <>
-                    <div className={`p-3 rounded-lg border ${!batchToggles.endereco_cidade ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}><label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.endereco_cidade} onChange={e => setBatchToggles({...batchToggles, endereco_cidade: e.target.checked})} className="rounded text-blue-600" />Sobrescrever Cidade</label><input disabled={!batchToggles.endereco_cidade} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none disabled:bg-gray-50" value={formData.endereco_cidade} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} /></div>
-                    <div className={`p-3 rounded-lg border ${!batchToggles.endereco_estado ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}><label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.endereco_estado} onChange={e => setBatchToggles({...batchToggles, endereco_estado: e.target.checked})} className="rounded text-blue-600" />Sobrescrever Estado (UF)</label><input disabled={!batchToggles.endereco_estado} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none disabled:bg-gray-50" value={formData.endereco_estado} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} /></div>
-                  </>
-                )}
               </div>
             </fieldset>
 
@@ -514,17 +517,18 @@ export default function Users() {
               </div>
             )}
 
+            {/* AUDITORIA NO MODAL COM OS NOMES TRADUZIDOS */}
             {modalMode === 'edit' && editingAuditData && (
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2 text-gray-500 mb-3"><Info className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wider">Auditoria do Registro</span></div>
                 <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200">
                   <div><span className="font-semibold">ID no Banco:</span> {editingAuditData.id}</div>
                   <div><span className="font-semibold">Criado em:</span> {formatDate(editingAuditData.criado_em)}</div>
-                  <div><span className="font-semibold">Criado por:</span> {editingAuditData.criado_por || '-'}</div>
+                  <div><span className="font-semibold">Criado por:</span> {getUserNameById(editingAuditData.criado_por)}</div>
                   <div><span className="font-semibold">Última alteração:</span> {formatDate(editingAuditData.alterado_em)}</div>
-                  <div><span className="font-semibold">Alterado por:</span> {editingAuditData.alterado_por || '-'}</div>
+                  <div><span className="font-semibold">Alterado por:</span> {getUserNameById(editingAuditData.alterado_por)}</div>
                   {editingAuditData.deletado_em && <div><span className="font-semibold text-red-500">Inativado em:</span> <span className="text-red-500">{formatDate(editingAuditData.deletado_em)}</span></div>}
-                  {editingAuditData.deletado_por && <div><span className="font-semibold text-red-500">Inativado por:</span> <span className="text-red-500">{editingAuditData.deletado_por}</span></div>}
+                  {editingAuditData.deletado_por && <div><span className="font-semibold text-red-500">Inativado por:</span> <span className="text-red-500">{getUserNameById(editingAuditData.deletado_por)}</span></div>}
                 </div>
               </div>
             )}
@@ -549,7 +553,7 @@ export default function Users() {
             <div className="relative flex-1 max-w-md flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input type="text" placeholder="Pesquisa rápida (Nome, E-mail, CPF, ID)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm" />
+                <input type="text" placeholder="Pesquisa rápida (Nome, E-mail, CPF)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm" />
               </div>
               <button onClick={() => { setShowFilters(!showFilters); if(!showFilters && queryBuilder.groups.length === 0) addGroup(); }} className={`p-2 rounded-lg border transition-colors flex items-center gap-2 ${showFilters || totalActiveRules > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <Filter className="w-5 h-5" />
@@ -572,85 +576,28 @@ export default function Users() {
                 </button>
                 
                 {showColumnMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 shadow-xl rounded-xl z-50 py-2 max-h-96 overflow-y-auto">
+                  <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 shadow-xl rounded-xl z-50 py-2 max-h-96 overflow-y-auto">
                     <div className="px-4 py-2 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase mb-1">Colunas Visíveis</div>
-                    {Object.keys(visibleColumns).map(col => (
-                      <label key={col} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm capitalize text-gray-700">
-                        <input type="checkbox" checked={visibleColumns[col]} onChange={() => toggleColumn(col)} className="rounded text-blue-600 mr-3 focus:ring-blue-500" /> 
-                        {col === 'id' ? 'ID do Banco' : col.replace(/_/g, ' ')}
-                      </label>
+                    {columns.map((col, index) => (
+                      <div key={col.id} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 border-b border-gray-50">
+                        <label className="flex items-center cursor-pointer text-sm capitalize text-gray-700 flex-1">
+                          <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded text-blue-600 mr-3 focus:ring-blue-500" /> 
+                          {col.label}
+                        </label>
+                        <div className="flex gap-2">
+                            <button onClick={() => moveColumn(index, -1)} disabled={index === 0} className="p-1 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-600 rounded disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
+                            <button onClick={() => moveColumn(index, 1)} disabled={index === columns.length - 1} className="p-1 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-600 rounded disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
 
               <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Exportar CSV"><Download className="w-5 h-5" /></button>
-              <div className="relative">
-                <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
-                {showAddMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
-                    <button onClick={handleOpenCreate} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"><UserPlus className="w-4 h-4 mr-2 text-blue-600" /> Novo Usuário</button>
-                    <button onClick={() => setShowAddMenu(false)} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"><UploadCloud className="w-4 h-4 mr-2 text-blue-600" /> Importar de CSV</button>
-                  </div>
-                )}
-              </div>
+              <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
             </div>
           </div>
-
-          {showFilters && (
-            <div className="bg-gray-50 p-5 border border-t-0 border-gray-200 rounded-b-xl shadow-sm mb-4 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-3">
-                <div className="flex items-center gap-3">
-                  <Layers className="w-5 h-5 text-gray-500" />
-                  <span className="text-sm font-bold text-gray-700">Mostrar resultados que correspondam a</span>
-                  <select value={queryBuilder.rootLogic} onChange={e => setQueryBuilder({...queryBuilder, rootLogic: e.target.value})} className="text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1 outline-none">
-                    <option value="AND">TODOS os Grupos (E)</option>
-                    <option value="OR">QUALQUER Grupo (OU)</option>
-                  </select>
-                </div>
-                <button onClick={clearFilters} className="text-xs text-red-600 hover:text-red-800 font-medium">Limpar Todos os Filtros</button>
-              </div>
-              
-              <div className="space-y-4">
-                {queryBuilder.groups.map((group, groupIndex) => (
-                  <div key={group.id} className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm relative">
-                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
-                      <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded">GRUPO {groupIndex + 1}</span>
-                      <span className="text-xs text-gray-500">Corresponder a</span>
-                      <select value={group.logic} onChange={e => updateGroupLogic(group.id, e.target.value)} className="text-xs font-bold text-gray-700 border border-gray-300 rounded px-1 outline-none bg-gray-50">
-                        <option value="OR">QUALQUER regra abaixo (OU)</option>
-                        <option value="AND">TODAS as regras abaixo (E)</option>
-                      </select>
-                      <button onClick={() => removeGroup(group.id)} className="ml-auto p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="Remover Grupo"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-
-                    <div className="space-y-2 pl-2 border-l-2 border-blue-200">
-                      {group.rules.map((rule, ruleIndex) => (
-                        <div key={rule.id} className="flex gap-3 items-center">
-                          <span className="text-xs font-bold text-blue-400 w-8 text-center">{ruleIndex === 0 ? '►' : group.logic === 'AND' ? 'E' : 'OU'}</span>
-                          <select className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.column} onChange={e => updateRule(group.id, rule.id, 'column', e.target.value)}>
-                            {Object.keys(visibleColumns).map(col => (<option key={col} value={col}>{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</option>))}
-                          </select>
-                          <select className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.operator} onChange={e => updateRule(group.id, rule.id, 'operator', e.target.value)}>
-                            <option value="starts_with">Começa com</option><option value="contains">Contém</option><option value="equals">É igual a</option><option value="not_equals">É diferente de</option>
-                          </select>
-                          {['role', 'papel', 'status'].includes(rule.column) ? (
-                            <select className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.value} onChange={e => updateRule(group.id, rule.id, 'value', e.target.value)}>
-                              <option value="">Selecione...</option>
-                              {['role', 'papel'].includes(rule.column) ? <><option value="TENANT_ADMIN">Admin</option><option value="PROFISSIONAL">Profissional</option><option value="CLIENTE">Cliente</option></> : <><option value="ATIVO">Ativo</option><option value="PENDENTE">Pendente</option><option value="INATIVO">Inativo</option></>}
-                            </select>
-                          ) : <input type="text" className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Digite o valor..." value={rule.value} onChange={e => updateRule(group.id, rule.id, 'value', e.target.value)} />}
-                          <button onClick={() => removeRule(group.id, rule.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><X className="w-4 h-4" /></button>
-                        </div>
-                      ))}
-                      <button onClick={() => addRule(group.id)} className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar Regra</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button onClick={addGroup} className="mt-4 text-sm font-bold text-gray-700 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 shadow-sm"><Layers className="w-4 h-4" /> Adicionar Novo Grupo</button>
-            </div>
-          )}
 
           <div className={`bg-white border border-gray-200 overflow-x-auto shadow-sm relative ${showFilters ? 'rounded-xl' : 'border-t-0 rounded-b-xl'}`}>
             <table className="w-full text-left min-w-[1200px]">
@@ -658,7 +605,7 @@ export default function Users() {
                 <tr>
                   <th className="px-6 py-4 w-12"><input type="checkbox" onChange={e => e.target.checked ? setSelectedUsers(paginatedUsers.map(u => u.id)) : setSelectedUsers([])} checked={selectedUsers.length > 0 && selectedUsers.length === paginatedUsers.length} /></th>
                   <th className="px-4 py-4 w-20 text-center font-semibold tracking-wider">Ações</th>
-                  {Object.keys(visibleColumns).map(col => visibleColumns[col] && <th key={col} className="px-6 py-4 capitalize font-semibold tracking-wider whitespace-nowrap">{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</th>)}
+                  {columns.map(col => col.visible && <th key={col.id} className="px-6 py-4 font-semibold tracking-wider whitespace-nowrap">{col.label}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -670,33 +617,38 @@ export default function Users() {
                       <td className="px-6 py-4"><input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => setSelectedUsers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
                       
                       <td className="px-4 py-4 text-center">
-                          <button onClick={() => openHistoryModal(user)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-transparent shadow-sm hover:border-blue-200" title="Ver Agenda">
+                          <button onClick={() => openHistoryModal(user)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-transparent shadow-sm hover:border-blue-200" title="Ver Agenda">
                               <CalendarDays className="w-4 h-4" />
                           </button>
                       </td>
 
-                      {visibleColumns.id && <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>}
-                      {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>}
-                      {visibleColumns.email && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>}
-                      {visibleColumns.role && <td className="px-6 py-4 text-xs font-semibold text-gray-500">{user.papel || user.role}</td>}
-                      {visibleColumns.telefone && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.telefone || '-'}</td>}
-                      {visibleColumns.status && (
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700 border border-green-200' : user.status === 'PENDENTE' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{user.status}</span>
-                        </td>
-                      )}
-                      
-                      {visibleColumns.cpf && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.cpf || '-'}</td>}
-                      {visibleColumns.telefone_contato && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.telefone_contato || '-'}</td>}
-                      {visibleColumns.endereco_cidade && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.endereco_cidade || '-'}</td>}
-                      {visibleColumns.endereco_estado && <td className="px-6 py-4 text-gray-600">{user.endereco_estado || '-'}</td>}
-                      
-                      {visibleColumns.criado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user.criado_em)}</td>}
-                      {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{user.criado_por || '-'}</td>}
-                      {visibleColumns.alterado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user.alterado_em)}</td>}
-                      {visibleColumns.alterado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{user.alterado_por || '-'}</td>}
-                      {visibleColumns.deletado_em && <td className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? formatDate(user.deletado_em) : '-'}</td>}
-                      {visibleColumns.deletado_por && <td className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? (user.deletado_por || 'Sistema') : '-'}</td>}
+                      {columns.map(col => {
+                        if (!col.visible) return null;
+                        
+                        if (col.id === 'nome') return <td key={col.id} className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>;
+                        if (col.id === 'email') return <td key={col.id} className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>;
+                        if (col.id === 'papel' || col.id === 'role') return <td key={col.id} className="px-6 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">{user.papel || user.role}</td>;
+                        if (col.id === 'status') return (
+                          <td key={col.id} className="px-6 py-4">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700 border border-green-200' : user.status === 'PENDENTE' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{user.status}</span>
+                          </td>
+                        );
+                        
+                        // ===== TRADUÇÃO DOS UUIDS PARA NOME =====
+                        if (col.id === 'criado_por' || col.id === 'alterado_por') {
+                            return <td key={col.id} className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{getUserNameById(user[col.id])}</td>;
+                        }
+                        if (col.id === 'deletado_por') {
+                            return <td key={col.id} className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? getUserNameById(user.deletado_por) : '-'}</td>;
+                        }
+
+                        if (col.id === 'deletado_em') return <td key={col.id} className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? formatDate(user.deletado_em) : '-'}</td>;
+                        if (col.id.endsWith('_em')) return <td key={col.id} className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user[col.id])}</td>;
+                        
+                        if (col.id === 'id') return <td key={col.id} className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>;
+
+                        return <td key={col.id} className="px-6 py-4 text-gray-600 whitespace-nowrap">{user[col.id] || '-'}</td>;
+                      })}
                     </tr>
                   ))
                 )}
@@ -706,28 +658,11 @@ export default function Users() {
         </div>
         
         <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 relative">
-          <div className="relative">
-            <button onClick={() => setShowPerfDetails(!showPerfDetails)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors border ${showPerfDetails ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-transparent hover:bg-gray-100'}`} title="Clique para detalhes">
-              <Clock className="w-4 h-4" /> <span className="font-medium">Carregado em {perfMetrics.total}ms</span>
-            </button>
-            {showPerfDetails && (
-              <div className="absolute bottom-10 left-0 bg-white border border-gray-200 shadow-xl rounded-xl p-4 w-64 z-50 text-gray-700 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2"><Activity className="w-4 h-4 text-blue-600" /><h4 className="font-bold text-sm text-gray-900">Análise de Performance</h4></div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center"><span className="text-gray-500">Tempo de Rede:</span> <span className="font-semibold">{perfMetrics.network}ms</span></div>
-                  <div className="flex justify-between items-center"><span className="text-gray-500">API (Servidor):</span> <span className="font-semibold">{perfMetrics.server}ms</span></div>
-                  <div className="flex justify-between items-center"><span className="text-gray-500">Render (Browser):</span> <span className="font-semibold">{perfMetrics.browser}ms</span></div>
-                  <div className="pt-2 mt-2 border-t border-gray-100 flex justify-between items-center"><span className="font-bold text-gray-900">Tempo Total:</span> <span className="font-bold text-blue-600 text-base">{perfMetrics.total}ms</span></div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 ml-auto">
             <div className="flex items-center gap-2">
               <span>Linhas por página:</span>
               <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="border border-gray-300 rounded px-2 py-1 bg-white outline-none focus:border-blue-500 text-gray-700 font-medium cursor-pointer">
-                <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={100000}>Todos</option>
+                <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
               </select>
             </div>
             <div className="font-medium">{filteredUsers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} de {filteredUsers.length}</div>
