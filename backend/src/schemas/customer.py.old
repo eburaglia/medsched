@@ -44,7 +44,6 @@ class CustomerUpdate(BaseModel):
 class CustomerResponse(CustomerBase):
     id: UUID
     criado_em: datetime
-    # 🎯 Voltando para String, pois é assim que está no banco de Clientes!
     criado_por: Optional[str] = None
     alterado_em: datetime
     alterado_por: Optional[str] = None

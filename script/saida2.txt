@@ -1,3 +1,5 @@
+====================================================
+=== CUSTOMERS.JSX ===
 import React, { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { jwtDecode } from 'jwt-decode';
@@ -6,7 +8,7 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, Lock, MapPin, ChevronUp, ChevronDown
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, Lock
 } from 'lucide-react';
 
 export default function Customers() {
@@ -14,7 +16,6 @@ export default function Customers() {
   const [professionals, setProfessionals] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [currentUserId, setCurrentUserId] = useState(null);
   
   const [showPerfDetails, setShowPerfDetails] = useState(false);
   const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 });
@@ -41,73 +42,23 @@ export default function Customers() {
 
   const [editingAuditData, setEditingAuditData] = useState(null);
 
-  // ---------------------------------------------------------
-  // LÓGICA DE COLUNAS E LOCAL STORAGE
-  // ---------------------------------------------------------
-  const defaultColumns = [
-    { id: 'id', label: 'ID', visible: false },
-    { id: 'nome', label: 'Nome', visible: true },
-    { id: 'cpf_cnpj', label: 'CPF/CNPJ', visible: true },
-    { id: 'email', label: 'Email', visible: true },
-    { id: 'telefone', label: 'Telefone', visible: true },
-    { id: 'status', label: 'Status', visible: true },
-    { id: 'endereco_cidade', label: 'Cidade', visible: false },
-    { id: 'endereco_estado', label: 'UF', visible: false },
-    { id: 'criado_em', label: 'Criado em', visible: false },
-    { id: 'criado_por', label: 'Criado por', visible: false },
-    { id: 'alterado_em', label: 'Alterado em', visible: false },
-    { id: 'alterado_por', label: 'Alterado por', visible: false },
-    { id: 'deletado_em', label: 'Inativado em', visible: false },
-    { id: 'deletado_por', label: 'Inativado por', visible: false }
-  ];
-
-  const [columns, setColumns] = useState(defaultColumns);
+  const [visibleColumns, setVisibleColumns] = useState({ 
+    id: false, nome: true, cpf_cnpj: true, email: true, telefone: true, status: true, 
+    endereco_cidade: false, endereco_estado: false, criado_em: false, criado_por: false, 
+    alterado_em: false, alterado_por: false, deletado_em: false, deletado_por: false
+  });
   
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // ==========================================
   // ESTADOS DO NOVO MODAL DE HISTÓRICO
+  // ==========================================
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedHistoryCustomer, setSelectedHistoryCustomer] = useState(null);
   const [customerAppointments, setCustomerAppointments] = useState([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
-  const [isCheckingCEP, setIsCheckingCEP] = useState(false);
-
-  const savePreferences = async (newColumns) => {
-    try {
-      const token = localStorage.getItem('medsched_token');
-      const decoded = jwtDecode(token);
-      const userRes = await api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } });
-      const currentPrefs = userRes.data.preferencias_ui || {};
-      
-      const updatedPrefs = {
-        ...currentPrefs,
-        tabelas: {
-          ...(currentPrefs.tabelas || {}),
-          customers: newColumns.map(c => ({ id: c.id, visible: c.visible }))
-        }
-      };
-      await api.put(`/users/${decoded.sub}`, { preferencias_ui: updatedPrefs }, { params: { tenant_id: decoded.tenant_id } });
-    } catch (err) {
-      console.error("Erro ao salvar preferências:", err);
-    }
-  };
-
-  const toggleColumn = (id) => {
-    const newCols = columns.map(c => c.id === id ? { ...c, visible: !c.visible } : c);
-    setColumns(newCols);
-    savePreferences(newCols);
-  };
-
-  const moveColumn = (index, direction) => {
-    const newCols = [...columns];
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= newCols.length) return;
-    [newCols[index], newCols[targetIndex]] = [newCols[targetIndex], newCols[index]];
-    setColumns(newCols);
-    savePreferences(newCols);
-  };
 
   const fetchCustomers = async () => {
     const startTime = performance.now();
@@ -115,27 +66,15 @@ export default function Customers() {
       const token = localStorage.getItem('medsched_token');
       if (!token) return;
       const decoded = jwtDecode(token);
-      setCurrentUserId(decoded.sub);
       
-      const [resCust, resProf, resMe] = await Promise.all([
+      const [resCust, resProf] = await Promise.all([
           api.get('/customers/', { params: { tenant_id: decoded.tenant_id } }),
-          api.get('/users/', { params: { tenant_id: decoded.tenant_id } }),
-          api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } })
+          api.get('/users/', { params: { tenant_id: decoded.tenant_id } })
       ]);
       const endTime = performance.now(); 
       
       setCustomers(resCust.data);
       setProfessionals(resProf.data);
-
-      if (resMe.data.preferencias_ui?.tabelas?.customers) {
-        const saved = resMe.data.preferencias_ui.tabelas.customers;
-        const reordered = saved.map(s => {
-          const original = defaultColumns.find(c => c.id === s.id);
-          return original ? { ...original, visible: s.visible } : null;
-        }).filter(Boolean);
-        const news = defaultColumns.filter(c => !saved.find(s => s.id === c.id));
-        setColumns([...reordered, ...news]);
-      }
 
       if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
       
@@ -145,6 +84,7 @@ export default function Customers() {
         const serverEstimate = Math.round(apiTotal * 0.35);
         const networkEstimate = apiTotal - serverEstimate;
         const browserEstimate = Math.round(renderTime - endTime);
+        
         setPerfMetrics({ server: serverEstimate, network: networkEstimate, browser: browserEstimate, api: apiTotal, total: apiTotal + browserEstimate });
       });
 
@@ -161,26 +101,6 @@ export default function Customers() {
     setCurrentPage(1);
     setSelectedCustomers([]); 
   }, [searchTerm, queryBuilder, itemsPerPage]);
-
-  const handleCEPLookup = async (cep) => {
-    const cleanCEP = cep.replace(/\D/g, '');
-    setFormData(prev => ({ ...prev, endereco_cep: cleanCEP }));
-    if (cleanCEP.length === 8) {
-      setIsCheckingCEP(true);
-      try {
-        const response = await api.get(`/utils/cep/${cleanCEP}`);
-        const data = response.data;
-        setFormData(prev => ({
-          ...prev,
-          endereco_logradouro: data.logradouro || '',
-          endereco_bairro: data.bairro || '',
-          endereco_cidade: data.localidade || '',
-          endereco_estado: data.uf || ''
-        }));
-        toast.success("Endereço localizado com sucesso!");
-      } catch (err) { toast.error("CEP não encontrado."); } finally { setIsCheckingCEP(false); }
-    }
-  };
 
   // ==========================================
   // FUNÇÕES DO HISTÓRICO DE AGENDAMENTOS
@@ -302,7 +222,7 @@ export default function Customers() {
   const handleExportCSV = () => {
     const dataToExport = selectedCustomers.length > 0 ? customers.filter(c => selectedCustomers.includes(c.id)) : filteredCustomers;
     if (dataToExport.length === 0) return toast.error("Nenhum dado para exportar.");
-    const headers = columns.filter(c => c.visible).map(c => c.id);
+    const headers = Object.keys(visibleColumns).filter(key => visibleColumns[key]);
     const csvRows = [headers.join(',')];
     for (const row of dataToExport) {
       const values = headers.map(header => `"${String(row[header] || '').replace(/"/g, '""')}"`);
@@ -315,7 +235,10 @@ export default function Customers() {
     const ano = now.getFullYear();
     const mes = String(now.getMonth() + 1).padStart(2, '0');
     const dia = String(now.getDate()).padStart(2, '0');
-    link.download = `medsched_clientes_${ano}${mes}${dia}.csv`;
+    const hora = String(now.getHours()).padStart(2, '0');
+    const minuto = String(now.getMinutes()).padStart(2, '0');
+    const segundo = String(now.getSeconds()).padStart(2, '0');
+    link.download = `medsched_clientes_${ano}${mes}${dia}_${hora}${minuto}${segundo}.csv`;
     link.click();
     toast.success(`${dataToExport.length} registros exportados!`);
   };
@@ -419,6 +342,7 @@ export default function Customers() {
     } finally { setIsSaving(false); }
   };
 
+  const toggleColumn = (colName) => setVisibleColumns(prev => ({ ...prev, [colName]: !prev[colName] }));
   const totalActiveRules = queryBuilder.groups.reduce((acc, g) => acc + g.rules.filter(r => r.value).length, 0);
   const formatDate = (isoString) => isoString ? new Date(isoString).toLocaleString('pt-BR') : '-';
 
@@ -526,36 +450,48 @@ export default function Customers() {
             )}
 
             {modalMode !== 'batch-edit' && (
-              <>
-                <fieldset className="border border-blue-200 p-4 rounded-xl bg-blue-50/30 mt-4 shadow-sm">
-                  <legend className="text-sm font-bold text-blue-700 px-2 uppercase tracking-wider flex items-center gap-2"><MapPin className="w-4 h-4" /> Contato & Localização</legend>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                    
-                    <div className="md:col-span-1">
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Telefone Principal</label>
-                      <input className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold bg-white" placeholder="(00) 00000-0000" value={formData.telefone || ''} onChange={e => setFormData({...formData, telefone: e.target.value})} />
-                    </div>
-                    <div className="relative md:col-span-1">
-                        <label className="block text-xs font-bold text-gray-700 mb-1">CEP</label>
-                        <input className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold bg-white" placeholder="00000-000" value={formData.endereco_cep || ''} onChange={e => handleCEPLookup(e.target.value)} />
-                        {isCheckingCEP && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-8 text-blue-500" />}
-                    </div>
-                    <div className="hidden md:block md:col-span-1"></div> 
-
-                    <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Logradouro (Rua, Av)</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={formData.endereco_logradouro || ''} onChange={e => setFormData({...formData, endereco_logradouro: e.target.value})} /></div>
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Número</label><input className="w-full px-4 py-2 border border-blue-400 shadow-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={formData.endereco_numero || ''} onChange={e => setFormData({...formData, endereco_numero: e.target.value})} /></div>
-                    
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Bairro</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={formData.endereco_bairro || ''} onChange={e => setFormData({...formData, endereco_bairro: e.target.value})} /></div>
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Cidade</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={formData.endereco_cidade || ''} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} /></div>
-                    <div className="md:col-span-1">
-                        <label className="block text-xs font-bold text-gray-700 mb-1">UF</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" maxLength={2} value={formData.endereco_estado || ''} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} />
+              <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
+                <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Contato & Endereço</legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Telefone Principal</label>
+                    <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="(00) 00000-0000" value={formData.telefone || ''} onChange={e => setFormData({...formData, telefone: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                    <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="00000-000" value={formData.endereco_cep || ''} onChange={e => setFormData({...formData, endereco_cep: e.target.value})} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Logradouro (Rua, Av.)</label>
+                        <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_logradouro || ''} onChange={e => setFormData({...formData, endereco_logradouro: e.target.value})} />
+                      </div>
+                      <div className="w-32">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                        <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_numero || ''} onChange={e => setFormData({...formData, endereco_numero: e.target.value})} />
+                      </div>
                     </div>
                   </div>
-                </fieldset>
-              </>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                    <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_bairro || ''} onChange={e => setFormData({...formData, endereco_bairro: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                    <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.endereco_cidade || ''} onChange={e => setFormData({...formData, endereco_cidade: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label>
+                      <input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" maxLength={2} placeholder="SP" value={formData.endereco_estado || ''} onChange={e => setFormData({...formData, endereco_estado: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
             )}
 
-            <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50 mt-4">
+            <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
               <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Configurações de Cadastro</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 {modalMode !== 'create' && (
@@ -586,7 +522,6 @@ export default function Customers() {
               </div>
             )}
 
-            {/* AUDITORIA: Já exibe o Nome direto do Banco */}
             {modalMode === 'edit' && editingAuditData && (
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2 text-gray-500 mb-3"><Info className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wider">Auditoria do Registro</span></div>
@@ -604,7 +539,7 @@ export default function Customers() {
 
             <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t mt-4 border-gray-100 flex gap-3">
               <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button type="submit" disabled={isSaving || isCheckingCEP} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg flex justify-center items-center gap-2 font-bold hover:bg-blue-700 transition-colors">
+              <button type="submit" disabled={isSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg flex justify-center items-center gap-2 font-bold hover:bg-blue-700 transition-colors">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />} 
                 {modalMode === 'create' ? 'Salvar Novo Cliente' : modalMode === 'edit' ? 'Salvar Alterações' : 'Aplicar em Lote'}
               </button>
@@ -645,19 +580,13 @@ export default function Customers() {
                 </button>
                 
                 {showColumnMenu && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 shadow-xl rounded-xl z-50 py-2 max-h-96 overflow-y-auto">
+                  <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 shadow-xl rounded-xl z-50 py-2 max-h-96 overflow-y-auto">
                     <div className="px-4 py-2 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase mb-1">Colunas Visíveis</div>
-                    {columns.map((col, index) => (
-                      <div key={col.id} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 border-b border-gray-50">
-                        <label className="flex items-center cursor-pointer text-sm capitalize text-gray-700 flex-1">
-                          <input type="checkbox" checked={col.visible} onChange={() => toggleColumn(col.id)} className="rounded text-blue-600 mr-3 focus:ring-blue-500" /> 
-                          {col.label}
-                        </label>
-                        <div className="flex gap-2">
-                            <button onClick={() => moveColumn(index, -1)} disabled={index === 0} className="p-1 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-600 rounded disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
-                            <button onClick={() => moveColumn(index, 1)} disabled={index === columns.length - 1} className="p-1 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-600 rounded disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
-                        </div>
-                      </div>
+                    {Object.keys(visibleColumns).map(col => (
+                      <label key={col} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm capitalize text-gray-700">
+                        <input type="checkbox" checked={visibleColumns[col]} onChange={() => toggleColumn(col)} className="rounded text-blue-600 mr-3 focus:ring-blue-500" /> 
+                        {col === 'id' ? 'ID do Banco' : col.replace(/_/g, ' ')}
+                      </label>
                     ))}
                   </div>
                 )}
@@ -708,7 +637,7 @@ export default function Customers() {
                         <div key={rule.id} className="flex gap-3 items-center">
                           <span className="text-xs font-bold text-blue-400 w-8 text-center">{ruleIndex === 0 ? '►' : group.logic === 'AND' ? 'E' : 'OU'}</span>
                           <select className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.column} onChange={e => updateRule(group.id, rule.id, 'column', e.target.value)}>
-                            {columns.map(col => (<option key={col.id} value={col.id}>{col.label}</option>))}
+                            {Object.keys(visibleColumns).map(col => (<option key={col} value={col}>{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</option>))}
                           </select>
                           <select className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white" value={rule.operator} onChange={e => updateRule(group.id, rule.id, 'operator', e.target.value)}>
                             <option value="starts_with">Começa com</option><option value="contains">Contém</option><option value="equals">É igual a</option><option value="not_equals">É diferente de</option>
@@ -737,7 +666,7 @@ export default function Customers() {
                 <tr>
                   <th className="px-6 py-4 w-12"><input type="checkbox" onChange={e => e.target.checked ? setSelectedCustomers(paginatedCustomers.map(u => u.id)) : setSelectedCustomers([])} checked={selectedCustomers.length > 0 && selectedCustomers.length === paginatedCustomers.length} /></th>
                   <th className="px-2 py-4 w-12 text-center">Ações</th> 
-                  {columns.map(col => col.visible && <th key={col.id} className="px-6 py-4 font-semibold tracking-wider whitespace-nowrap">{col.label}</th>)}
+                  {Object.keys(visibleColumns).map(col => visibleColumns[col] && <th key={col} className="px-6 py-4 capitalize font-semibold tracking-wider whitespace-nowrap">{col === 'id' ? 'ID' : col.replace(/_/g, ' ')}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -749,31 +678,31 @@ export default function Customers() {
                       <td className="px-6 py-4"><input type="checkbox" checked={selectedCustomers.includes(user.id)} onChange={() => setSelectedCustomers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
                       
                       <td className="px-2 py-4 text-center">
-                          <button onClick={() => openHistoryModal(user)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all border border-transparent shadow-sm hover:border-blue-200" title="Ver Histórico de Agendamentos">
+                          <button onClick={() => openHistoryModal(user)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all" title="Ver Histórico de Agendamentos">
                               <CalendarDays className="w-4 h-4" />
                           </button>
                       </td>
 
-                      {columns.map(col => {
-                        if (!col.visible) return null;
-                        
-                        if (col.id === 'nome') return <td key={col.id} className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>;
-                        if (col.id === 'email') return <td key={col.id} className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>;
-                        if (col.id === 'status') return (
-                          <td key={col.id} className="px-6 py-4">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{user.status}</span>
-                          </td>
-                        );
-                        
-                        if (col.id === 'deletado_em') return <td key={col.id} className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? formatDate(user.deletado_em) : '-'}</td>;
-                        if (col.id === 'deletado_por') return <td key={col.id} className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? (user.deletado_por || 'Sistema') : '-'}</td>;
-
-                        if (col.id.endsWith('_em')) return <td key={col.id} className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user[col.id])}</td>;
-                        
-                        if (col.id === 'id') return <td key={col.id} className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>;
-
-                        return <td key={col.id} className="px-6 py-4 text-gray-600 whitespace-nowrap">{user[col.id] || '-'}</td>;
-                      })}
+                      {visibleColumns.id && <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.id}</td>}
+                      {visibleColumns.nome && <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>}
+                      {visibleColumns.cpf_cnpj && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.cpf_cnpj || '-'}</td>}
+                      {visibleColumns.email && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email || '-'}</td>}
+                      {visibleColumns.telefone && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.telefone || '-'}</td>}
+                      {visibleColumns.status && (
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{user.status}</span>
+                        </td>
+                      )}
+                      
+                      {visibleColumns.endereco_cidade && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.endereco_cidade || '-'}</td>}
+                      {visibleColumns.endereco_estado && <td className="px-6 py-4 text-gray-600">{user.endereco_estado || '-'}</td>}
+                      
+                      {visibleColumns.criado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user.criado_em)}</td>}
+                      {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{user.criado_por || '-'}</td>}
+                      {visibleColumns.alterado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(user.alterado_em)}</td>}
+                      {visibleColumns.alterado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{user.alterado_por || '-'}</td>}
+                      {visibleColumns.deletado_em && <td className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? formatDate(user.deletado_em) : '-'}</td>}
+                      {visibleColumns.deletado_por && <td className={`px-6 py-4 text-xs whitespace-nowrap ${user.status === 'INATIVO' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{user.status === 'INATIVO' ? (user.deletado_por || 'Sistema') : '-'}</td>}
                     </tr>
                   ))
                 )}
@@ -818,3 +747,226 @@ export default function Customers() {
     </Layout>
   );
 }
+
+=== MODEL CUSTOMER ===
+import enum
+import uuid
+from datetime import datetime
+from sqlalchemy import Column, String, DateTime, ForeignKey, Date, Text, Enum
+from sqlalchemy.dialects.postgresql import UUID
+
+from src.database import Base
+
+class CustomerStatus(str, enum.Enum):
+    ATIVO = "ATIVO"
+    INATIVO = "INATIVO"
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    status = Column(Enum(CustomerStatus), default=CustomerStatus.ATIVO, nullable=False)
+    nome = Column(String(255), nullable=False, index=True)
+    cpf_cnpj = Column(String(20), nullable=True) 
+    data_nascimento = Column(Date, nullable=True) 
+    genero = Column(String(50), nullable=True)
+    telefone = Column(String(20), nullable=True)
+    email = Column(String(255), nullable=True)
+    endereco_logradouro = Column(String(255), nullable=True)
+    endereco_numero = Column(String(50), nullable=True)
+    endereco_bairro = Column(String(100), nullable=True)
+    endereco_cidade = Column(String(100), nullable=True)
+    endereco_estado = Column(String(2), nullable=True)
+    endereco_cep = Column(String(20), nullable=True)
+    observacoes = Column(Text, nullable=True)
+
+    # Auditoria
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+    criado_por = Column(String(255), nullable=True)
+    alterado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    alterado_por = Column(String(255), nullable=True)
+    deletado_em = Column(DateTime, nullable=True)
+    deletado_por = Column(String(255), nullable=True)
+
+=== SCHEMA CUSTOMER ===
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from typing import Optional
+from datetime import date, datetime
+from uuid import UUID
+
+from src.models.customer import CustomerStatus
+
+class CustomerBase(BaseModel):
+    nome: str = Field(..., min_length=3, max_length=255, description="Nome completo ou Razão Social")
+    cpf_cnpj: Optional[str] = Field(None, max_length=20)
+    data_nascimento: Optional[date] = Field(None, description="Data de nascimento ou fundação")
+    genero: Optional[str] = Field(None, max_length=50)
+    telefone: Optional[str] = Field(None, max_length=20)
+    email: Optional[EmailStr] = Field(None)
+    endereco_logradouro: Optional[str] = Field(None, max_length=255)
+    endereco_numero: Optional[str] = Field(None, max_length=50)
+    endereco_bairro: Optional[str] = Field(None, max_length=100)
+    endereco_cidade: Optional[str] = Field(None, max_length=100)
+    endereco_estado: Optional[str] = Field(None, min_length=2, max_length=2)
+    endereco_cep: Optional[str] = Field(None, max_length=20)
+    observacoes: Optional[str] = Field(None)
+    status: Optional[CustomerStatus] = Field(default=CustomerStatus.ATIVO)
+    tenant_id: UUID = Field(...)
+
+class CustomerCreate(CustomerBase):
+    pass
+
+class CustomerUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=3, max_length=255)
+    cpf_cnpj: Optional[str] = Field(None, max_length=20)
+    data_nascimento: Optional[date] = None
+    genero: Optional[str] = Field(None, max_length=50)
+    telefone: Optional[str] = Field(None, max_length=20)
+    email: Optional[EmailStr] = None
+    endereco_logradouro: Optional[str] = Field(None, max_length=255)
+    endereco_numero: Optional[str] = Field(None, max_length=50)
+    endereco_bairro: Optional[str] = Field(None, max_length=100)
+    endereco_cidade: Optional[str] = Field(None, max_length=100)
+    endereco_estado: Optional[str] = Field(None, min_length=2, max_length=2)
+    endereco_cep: Optional[str] = Field(None, max_length=20)
+    observacoes: Optional[str] = None
+    status: Optional[CustomerStatus] = None
+
+class CustomerResponse(CustomerBase):
+    id: UUID
+    criado_em: datetime
+    criado_por: Optional[str] = None
+    alterado_em: datetime
+    alterado_por: Optional[str] = None
+    deletado_em: Optional[datetime] = None
+    deletado_por: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+=== CRUD CUSTOMER ===
+from sqlalchemy.orm import Session
+from uuid import UUID
+from datetime import datetime
+
+from src.models.customer import Customer, CustomerStatus
+from src.schemas.customer import CustomerCreate, CustomerUpdate
+
+def get_customer_by_id(db: Session, customer_id: UUID, tenant_id: UUID) -> Customer | None:
+    return db.query(Customer).filter(
+        Customer.id == customer_id,
+        Customer.tenant_id == tenant_id
+    ).first()
+
+def get_customer_by_cpf_cnpj(db: Session, cpf_cnpj: str, tenant_id: UUID) -> Customer | None:
+    return db.query(Customer).filter(
+        Customer.cpf_cnpj == cpf_cnpj,
+        Customer.tenant_id == tenant_id
+    ).first()
+
+def get_customers_by_tenant(db: Session, tenant_id: UUID, skip: int = 0, limit: int = 100):
+    return db.query(Customer).filter(
+        Customer.tenant_id == tenant_id
+    ).order_by(Customer.nome.asc()).offset(skip).limit(limit).all()
+
+def create_customer(db: Session, obj_in: CustomerCreate, current_user_name: str) -> Customer:
+    db_obj = Customer(**obj_in.model_dump())
+    db_obj.criado_por = current_user_name
+    db_obj.alterado_por = current_user_name
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+def update_customer(db: Session, db_customer: Customer, obj_in: CustomerUpdate, current_user_name: str) -> Customer:
+    update_data = obj_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_customer, field, value)
+    
+    db_customer.alterado_por = current_user_name
+
+    # Lógica de Soft Delete
+    if "status" in update_data and update_data["status"] == CustomerStatus.INATIVO:
+        db_customer.deletado_em = datetime.utcnow()
+        db_customer.deletado_por = current_user_name
+    elif "status" in update_data and update_data["status"] == CustomerStatus.ATIVO:
+        db_customer.deletado_em = None
+        db_customer.deletado_por = None
+
+    db.add(db_customer)
+    db.commit()
+    db.refresh(db_customer)
+    return db_customer
+
+=== ENDPOINTS CUSTOMER ===
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+from uuid import UUID
+
+from src.database import get_db
+from src.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
+from src.crud import customer as crud_customer
+from src.api.deps import get_current_user
+from src.models.user import User
+
+router = APIRouter(
+    prefix="/customers",
+    tags=["Clientes"]
+)
+
+@router.post("/", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
+def create_customer(
+    customer_in: CustomerCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if str(current_user.tenant_id) != str(customer_in.tenant_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+
+    if customer_in.cpf_cnpj:
+        existing_customer = crud_customer.get_customer_by_cpf_cnpj(db=db, cpf_cnpj=customer_in.cpf_cnpj, tenant_id=customer_in.tenant_id)
+        if existing_customer:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CPF/CNPJ já cadastrado nesta clínica.")
+
+    return crud_customer.create_customer(db=db, obj_in=customer_in, current_user_name=current_user.nome)
+
+@router.get("/", response_model=List[CustomerResponse])
+def read_customers(
+    tenant_id: UUID,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if str(current_user.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+    return crud_customer.get_customers_by_tenant(db=db, tenant_id=tenant_id, skip=skip, limit=limit)
+
+@router.get("/{customer_id}", response_model=CustomerResponse)
+def read_customer(
+    customer_id: UUID,
+    tenant_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if str(current_user.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+    customer = crud_customer.get_customer_by_id(db=db, customer_id=customer_id, tenant_id=tenant_id)
+    if not customer: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado.")
+    return customer
+
+@router.put("/{customer_id}", response_model=CustomerResponse)
+def update_customer(
+    customer_id: UUID,
+    tenant_id: UUID,
+    customer_in: CustomerUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if str(current_user.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+    customer = crud_customer.get_customer_by_id(db=db, customer_id=customer_id, tenant_id=tenant_id)
+    if not customer: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado.")
+    return crud_customer.update_customer(db=db, db_customer=customer, obj_in=customer_in, current_user_name=current_user.nome)
