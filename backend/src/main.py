@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, financial, utils
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, financial, utils, dashboard
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -90,3 +90,8 @@ app.include_router(
     prefix="/api/v1"
 )
 
+# NOVO ROTEADOR: DASHBOARD
+app.include_router(
+    dashboard.router,
+    prefix="/api/v1"
+)

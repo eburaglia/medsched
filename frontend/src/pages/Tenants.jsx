@@ -39,9 +39,10 @@ export default function Tenants() {
 
   const [editingAuditData, setEditingAuditData] = useState(null);
 
+  // NOVO: Adicionado as colunas de deleção na matriz de visibilidade e mantendo as de auditoria
   const [visibleColumns, setVisibleColumns] = useState({ 
     codigo_visual: true, nome: true, cnpj: false, dominio_interno: true, email_contato: true, telefone_contato: true, status: true, 
-    endereco_cidade: false, endereco_estado: false, criado_em: false, criado_por: false, alterado_em: false
+    endereco_cidade: false, endereco_estado: false, criado_em: false, criado_por: false, alterado_em: false, alterado_por: false, deletado_em: false, deletado_por: false
   });
   
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -150,7 +151,7 @@ export default function Tenants() {
     const loadingToast = toast.loading("Processando...");
     try {
       for (const id of selectedTenants) {
-        await api.put(`/tenants/${id}`, { status: "inativo" });
+        await api.delete(`/tenants/${id}`); // Trocado para usar DELETE logico com auditoria em vez de PUT direto
       }
       toast.success("Operação concluída.", { id: loadingToast });
       setSelectedTenants([]);
@@ -462,10 +463,11 @@ export default function Tenants() {
                 <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-200">
                   <div><span className="font-semibold">ID no Banco:</span> {editingAuditData.id}</div>
                   <div><span className="font-semibold">Criado em:</span> {formatDate(editingAuditData.criado_em)}</div>
-                  <div><span className="font-semibold">Criado por:</span> {editingAuditData.criado_por || '-'}</div>
+                  <div><span className="font-semibold">Criado por:</span> {editingAuditData.criado_por_nome || editingAuditData.criado_por || '-'}</div>
                   <div><span className="font-semibold">Última alteração:</span> {formatDate(editingAuditData.alterado_em)}</div>
-                  <div><span className="font-semibold">Alterado por:</span> {editingAuditData.alterado_por || '-'}</div>
+                  <div><span className="font-semibold">Alterado por:</span> {editingAuditData.alterado_por_nome || editingAuditData.alterado_por || '-'}</div>
                   {editingAuditData.deletado_em && <div><span className="font-semibold text-red-500">Inativado em:</span> <span className="text-red-500">{formatDate(editingAuditData.deletado_em)}</span></div>}
+                  {editingAuditData.deletado_por && <div><span className="font-semibold text-red-500">Inativado por:</span> <span className="text-red-500">{editingAuditData.deletado_por_nome || editingAuditData.deletado_por || '-'}</span></div>}
                 </div>
               </div>
             )}
@@ -594,9 +596,9 @@ export default function Tenants() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {isLoading ? (
-                  <tr><td colSpan={15} className="px-6 py-12 text-center text-gray-400"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2"/>Carregando clínicas...</td></tr>
+                  <tr><td colSpan={20} className="px-6 py-12 text-center text-gray-400"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2"/>Carregando clínicas...</td></tr>
                 ) : paginatedTenants.length === 0 ? (
-                  <tr><td colSpan={15} className="px-6 py-12 text-center text-gray-500 font-medium">Nenhuma clínica encontrada.</td></tr>
+                  <tr><td colSpan={20} className="px-6 py-12 text-center text-gray-500 font-medium">Nenhuma clínica encontrada.</td></tr>
                 ) : paginatedTenants.map((t) => (
                   <tr key={t.id} className={`hover:bg-blue-50/50 transition-colors ${selectedTenants.includes(t.id) ? 'bg-blue-50' : ''}`}>
                     <td className="px-6 py-4"><input type="checkbox" checked={selectedTenants.includes(t.id)} onChange={() => setSelectedTenants(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])} /></td>
@@ -618,12 +620,14 @@ export default function Tenants() {
                     )}
                     {visibleColumns.endereco_cidade && <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{t.endereco_cidade || '-'}</td>}
                     {visibleColumns.endereco_estado && <td className="px-6 py-4 text-gray-600">{t.endereco_estado || '-'}</td>}
+                    
+                    {/* COLUNAS DE AUDITORIA ATUALIZADAS PARA EXIBIR NOMES */}
                     {visibleColumns.criado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(t.criado_em)}</td>}
-                    {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{t.criado_por || '-'}</td>}
+                    {visibleColumns.criado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{t.criado_por_nome || t.criado_por || '-'}</td>}
                     {visibleColumns.alterado_em && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{formatDate(t.alterado_em)}</td>}
-                    {visibleColumns.alterado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{t.alterado_por || '-'}</td>}
+                    {visibleColumns.alterado_por && <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{t.alterado_por_nome || t.alterado_por || '-'}</td>}
                     {visibleColumns.deletado_em && <td className={`px-6 py-4 text-xs whitespace-nowrap ${t.status === 'inativo' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{t.status === 'inativo' ? formatDate(t.deletado_em) : '-'}</td>}
-                    {visibleColumns.deletado_por && <td className={`px-6 py-4 text-xs whitespace-nowrap ${t.status === 'inativo' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{t.status === 'inativo' ? (t.deletado_por || 'Sistema') : '-'}</td>}
+                    {visibleColumns.deletado_por && <td className={`px-6 py-4 text-xs whitespace-nowrap ${t.status === 'inativo' ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{t.status === 'inativo' ? (t.deletado_por_nome || t.deletado_por || 'Sistema') : '-'}</td>}
                   </tr>
                 ))}
               </tbody>

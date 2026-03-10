@@ -11,9 +11,11 @@ class UserStatus(str, enum.Enum):
     INATIVO = "INATIVO"
 
 class UserRole(str, enum.Enum):
-    TENANT_ADMIN = "TENANT_ADMIN"
-    PROFISSIONAL = "PROFISSIONAL"
-    CLIENTE = "CLIENTE"
+    SYSTEM_ADMIN = "SYSTEM_ADMIN"    # Novo: Admin Global do SaaS
+    TENANT_ADMIN = "TENANT_ADMIN"    # Dono da Clínica
+    GESTOR = "GESTOR"                # Novo: Gerente/Recepção (e Aprovador)
+    PROFISSIONAL = "PROFISSIONAL"    # Médico/Especialista
+    CLIENTE = "CLIENTE"              # Paciente
 
 class User(AuditoriaMixin, Base):
     __tablename__ = "users"
@@ -37,7 +39,6 @@ class User(AuditoriaMixin, Base):
     endereco_estado = Column(String(2), nullable=True)
     endereco_regiao = Column(String(50), nullable=True)
 
-    # NOVO: O campo flexível para salvar o visual da tela
     preferencias_ui = Column(JSONB, nullable=True)
 
     senha_hash = Column(String(255), nullable=False)

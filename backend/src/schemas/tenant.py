@@ -11,7 +11,6 @@ class TenantBase(BaseModel):
     segmento_atuacao: str = Field(..., max_length=100)
     fuso_horario: str = Field(..., max_length=50)
     
-    # Endereço Completo
     endereco_cep: Optional[str] = Field(None, max_length=20)
     endereco_logradouro: str = Field(..., max_length=255)
     endereco_numero: Optional[str] = Field(None, max_length=50)
@@ -39,7 +38,6 @@ class TenantUpdate(BaseModel):
     segmento_atuacao: Optional[str] = Field(None, max_length=100)
     fuso_horario: Optional[str] = Field(None, max_length=50)
     
-    # Endereço Completo
     endereco_cep: Optional[str] = Field(None, max_length=20)
     endereco_logradouro: Optional[str] = Field(None, max_length=255)
     endereco_numero: Optional[str] = Field(None, max_length=50)
@@ -65,9 +63,14 @@ class TenantResponse(TenantBase):
     
     criado_em: datetime
     criado_por: Optional[UUID] = None
+    criado_por_nome: Optional[str] = None  # NOVO: Nome do Criador
+    
     alterado_em: Optional[datetime] = None
     alterado_por: Optional[UUID] = None
+    alterado_por_nome: Optional[str] = None # NOVO: Nome do Alterador
+    
     deletado_em: Optional[datetime] = None
     deletado_por: Optional[UUID] = None
+    deletado_por_nome: Optional[str] = None # NOVO: Nome do Deletador
 
     model_config = ConfigDict(from_attributes=True)
