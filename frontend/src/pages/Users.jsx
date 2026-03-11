@@ -22,7 +22,6 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
-  const [showAddMenu, setShowAddMenu] = useState(false);
   
   const [showFilters, setShowFilters] = useState(false);
   const [queryBuilder, setQueryBuilder] = useState({ rootLogic: 'AND', groups: [] });
@@ -33,9 +32,6 @@ export default function Users() {
   
   const [batchToggles, setBatchToggles] = useState({ papel: false, status: false, endereco_cidade: false, endereco_estado: false });
 
-  // ---------------------------------------------------------
-  // COLUNAS PADRÃO E ESTADO
-  // ---------------------------------------------------------
   const defaultColumns = [
     { id: 'id', label: 'ID', visible: false },
     { id: 'nome', label: 'Nome', visible: true },
@@ -75,14 +71,23 @@ export default function Users() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
 
-  // ---------------------------------------------------------
-  // SALVAR E LER PREFERÊNCIAS NO BANCO
-  // ---------------------------------------------------------
+  // FUNÇÃO DE UTILIDADE MÁGICA PARA O SUPER ADMIN
+  const getActiveTenantId = () => {
+      const token = localStorage.getItem('medsched_token');
+      if (!token) return null;
+      const decoded = jwtDecode(token);
+      // Se tiver tenant_id no token, usa ele. Se não (Super Admin), usa o do dropdown.
+      return decoded.tenant_id || localStorage.getItem('selected_tenant_id');
+  };
+
   const savePreferences = async (newColumns) => {
     try {
       const token = localStorage.getItem('medsched_token');
       const decoded = jwtDecode(token);
-      const userRes = await api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } });
+      // Evita erro se o Super Admin (que não tem preferencias_ui na tabela users) tentar salvar
+      if (['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(decoded.papel || decoded.role)) return;
+      
+      const userRes = await api.get(`/users/${decoded.sub}`, { params: { tenant_id: getActiveTenantId() } });
       const currentPrefs = userRes.data.preferencias_ui || {};
       
       const updatedPrefs = {
@@ -92,7 +97,7 @@ export default function Users() {
           users: newColumns.map(c => ({ id: c.id, visible: c.visible }))
         }
       };
-      await api.put(`/users/${decoded.sub}`, { preferencias_ui: updatedPrefs }, { params: { tenant_id: decoded.tenant_id } });
+      await api.put(`/users/${decoded.sub}`, { preferencias_ui: updatedPrefs }, { params: { tenant_id: getActiveTenantId() } });
     } catch (err) {
       console.error("Erro ao salvar preferências:", err);
     }
@@ -121,27 +126,34 @@ export default function Users() {
       const decoded = jwtDecode(token);
       setCurrentUserId(decoded.sub);
       
-      const [resUsers, resCust, resMe] = await Promise.all([
-          api.get('/users/', { params: { tenant_id: decoded.tenant_id } }),
-          api.get('/customers/', { params: { tenant_id: decoded.tenant_id } }),
-          api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } })
+      const activeTenant = getActiveTenantId();
+      if (!activeTenant) {
+          setIsLoading(false);
+          return; // Super admin não selecionou nenhuma clínica ainda
+      }
+      
+      const [resUsers, resCust] = await Promise.all([
+          api.get('/users/', { params: { tenant_id: activeTenant } }),
+          api.get('/customers/', { params: { tenant_id: activeTenant } })
       ]);
       const endTime = performance.now(); 
       
       setUsers(resUsers.data);
       setCustomers(resCust.data);
 
-      if (resMe.data.preferencias_ui?.tabelas?.users) {
-        const saved = resMe.data.preferencias_ui.tabelas.users;
-        const reordered = saved.map(s => {
-          const original = defaultColumns.find(c => c.id === s.id);
-          return original ? { ...original, visible: s.visible } : null;
-        }).filter(Boolean);
-        const news = defaultColumns.filter(c => !saved.find(s => s.id === c.id));
-        setColumns([...reordered, ...news]);
+      if (!['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(decoded.papel || decoded.role)) {
+          const resMe = await api.get(`/users/${decoded.sub}`, { params: { tenant_id: activeTenant } });
+          if (resMe.data.preferencias_ui?.tabelas?.users) {
+            const saved = resMe.data.preferencias_ui.tabelas.users;
+            const reordered = saved.map(s => {
+              const original = defaultColumns.find(c => c.id === s.id);
+              return original ? { ...original, visible: s.visible } : null;
+            }).filter(Boolean);
+            const news = defaultColumns.filter(c => !saved.find(s => s.id === c.id));
+            setColumns([...reordered, ...news]);
+          }
       }
 
-      if (modalMode === 'create') setFormData(prev => ({ ...prev, tenant_id: decoded.tenant_id }));
       setPerfMetrics(p => ({ ...p, total: Math.round(endTime - startTime) }));
     } catch (err) {
       setError("Falha ao carregar usuários.");
@@ -183,8 +195,7 @@ export default function Users() {
       setIsHistoryModalOpen(true);
       setIsHistoryLoading(true);
       try {
-          const tenantId = jwtDecode(localStorage.getItem('medsched_token')).tenant_id;
-          const res = await api.get('/appointments/', { params: { tenant_id: tenantId } });
+          const res = await api.get('/appointments/', { params: { tenant_id: getActiveTenantId() } });
           const myApps = res.data.filter(app => app.profissional_id === user.id).sort((a,b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
           setUserAppointments(myApps);
       } catch (err) { toast.error("Erro ao carregar a agenda."); } finally { setIsHistoryLoading(false); }
@@ -230,20 +241,25 @@ export default function Users() {
     }
   };
 
+  // CORRIGIDO: Usa a mágica do getActiveTenantId
   const handleOpenCreate = () => { 
-    setShowAddMenu(false); 
+    const activeTenant = getActiveTenantId();
+    if (!activeTenant) return toast.error("Selecione uma clínica no menu lateral primeiro.");
+    
     setModalMode('create'); 
     setEditingAuditData(null);
     setFormData({ 
       nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', 
       cpf: '', telefone: '', telefone_contato: '', 
       endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '',
-      tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
+      tenant_id: activeTenant
     }); 
     setIsModalOpen(true); 
   };
 
+  // CORRIGIDO: Usa a mágica do getActiveTenantId
   const handleOpenEdit = () => {
+    const activeTenant = getActiveTenantId();
     if (selectedUsers.length === 1) {
       const userToEdit = users.find(u => u.id === selectedUsers[0]);
       setFormData({ 
@@ -251,7 +267,7 @@ export default function Users() {
         cpf: userToEdit.cpf || '', telefone: userToEdit.telefone || '', telefone_contato: userToEdit.telefone_contato || '',
         endereco_cep: userToEdit.endereco_cep || '', endereco_logradouro: userToEdit.endereco_logradouro || '', endereco_numero: userToEdit.endereco_numero || '', endereco_bairro: userToEdit.endereco_bairro || '', endereco_cidade: userToEdit.endereco_cidade || '',
         endereco_estado: userToEdit.endereco_estado || '', endereco_regiao: userToEdit.endereco_regiao || '', observacoes: userToEdit.observacoes || '',
-        senha: '', tenant_id: userToEdit.tenant_id 
+        senha: '', tenant_id: activeTenant 
       });
       setEditingAuditData({
         id: userToEdit.id,
@@ -263,7 +279,7 @@ export default function Users() {
     } else if (selectedUsers.length > 1) {
       setModalMode('batch-edit'); setBatchToggles({ papel: false, status: false, endereco_cidade: false, endereco_estado: false }); 
       setFormData({ 
-        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id 
+        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: activeTenant 
       }); 
       setIsModalOpen(true);
     }
@@ -294,7 +310,7 @@ export default function Users() {
     try {
       for (const userId of selectedUsers) {
         if (userId === currentUserId) continue;
-        await api.put(`/users/${userId}`, { status: "INATIVO" }, { params: { tenant_id: jwtDecode(localStorage.getItem('medsched_token')).tenant_id } });
+        await api.put(`/users/${userId}`, { status: "INATIVO" }, { params: { tenant_id: getActiveTenantId() } });
       }
       toast.success("Operação concluída.", { id: loadingToast });
       setSelectedUsers([]);
@@ -394,9 +410,6 @@ export default function Users() {
   const totalActiveRules = queryBuilder.groups.reduce((acc, g) => acc + g.rules.filter(r => r.value).length, 0);
   const formatDate = (isoString) => isoString ? new Date(isoString).toLocaleString('pt-BR') : '-';
 
-  // ---------------------------------------------------------
-  // MÁGICA: TRADUZ O UUID PARA O NOME DA PESSOA
-  // ---------------------------------------------------------
   const getUserNameById = (id) => {
       if (!id) return '-';
       const found = users.find(u => u.id === id);
@@ -408,7 +421,6 @@ export default function Users() {
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
-        {/* MODAL AGENDA */}
         <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Agenda: ${selectedHistoryUser?.nome}`}>
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -437,7 +449,6 @@ export default function Users() {
             </div>
         </Modal>
 
-        {/* MODAL CADASTRO/EDIÇÃO */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}>
           <form onSubmit={handleSaveUser} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
@@ -453,9 +464,9 @@ export default function Users() {
                 <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Informações Básicas</legend>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label><input required className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.nome || ''} onChange={e => setFormData({...formData, nome: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label><input required disabled={modalMode === 'edit'} type="email" className={`w-full px-4 py-2 border border-gray-300 rounded-lg outline-none ${modalMode === 'edit' ? 'bg-gray-100 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500'}`} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label><input required disabled={modalMode === 'edit'} type="email" autoComplete="off" className={`w-full px-4 py-2 border border-gray-300 rounded-lg outline-none ${modalMode === 'edit' ? 'bg-gray-100 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500'}`} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">CPF</label><input className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="000.000.000-00" value={formData.cpf || ''} onChange={e => setFormData({...formData, cpf: e.target.value})} /></div>
-                  {modalMode === 'create' && (<div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Senha de Acesso</label><input required type="password" minLength={8} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.senha || ''} onChange={e => setFormData({...formData, senha: e.target.value})} /></div>)}
+                  {modalMode === 'create' && (<div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Senha de Acesso</label><input required type="password" autoComplete="new-password" minLength={8} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.senha || ''} onChange={e => setFormData({...formData, senha: e.target.value})} /></div>)}
                 </div>
               </fieldset>
             )}
@@ -517,7 +528,6 @@ export default function Users() {
               </div>
             )}
 
-            {/* AUDITORIA NO MODAL COM OS NOMES TRADUZIDOS */}
             {modalMode === 'edit' && editingAuditData && (
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2 text-gray-500 mb-3"><Info className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wider">Auditoria do Registro</span></div>
@@ -595,7 +605,9 @@ export default function Users() {
               </div>
 
               <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Exportar CSV"><Download className="w-5 h-5" /></button>
-              <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
+              
+              {/* BOTÃO CORRIGIDO */}
+              <button onClick={handleOpenCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
             </div>
           </div>
 
@@ -634,7 +646,6 @@ export default function Users() {
                           </td>
                         );
                         
-                        // ===== TRADUÇÃO DOS UUIDS PARA NOME =====
                         if (col.id === 'criado_por' || col.id === 'alterado_por') {
                             return <td key={col.id} className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">{getUserNameById(user[col.id])}</td>;
                         }

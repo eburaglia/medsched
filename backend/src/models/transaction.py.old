@@ -1,0 +1,45 @@
+import enum
+import uuid
+from datetime import datetime
+from sqlalchemy import Column, String, Numeric, DateTime, Enum, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID
+from src.database import Base
+from src.models.base import AuditoriaMixin
+
+class TransactionStatus(str, enum.Enum):
+    PENDENTE = "pendente"
+    PAGO = "pago"
+    CANCELADO = "cancelado"
+    ATRASADO = "atrasado"
+
+class TransactionType(str, enum.Enum):
+    RECEITA = "receita"
+    DESPESA = "despesa"
+
+class Transaction(AuditoriaMixin, Base):
+    __tablename__ = "financial_transactions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Relacionamentos
+    appointment_id = Column(UUID(as_uuid=True), ForeignKey("appointments.id"), nullable=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    professional_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("financial_categories.id"), nullable=False)
+    payment_method_id = Column(UUID(as_uuid=True), ForeignKey("payment_methods.id"), nullable=True)
+
+    tipo = Column(Enum(TransactionType), nullable=False)
+    descricao = Column(String(255), nullable=False)
+    
+    # A MÁGICA DO COMISSIONAMENTO E TAXAS:
+    valor_total = Column(Numeric(10, 2), nullable=False)       # Ex: 150.00 (O que o cliente pagou)
+    valor_taxas = Column(Numeric(10, 2), default=0)            # Ex: 5.00 (Taxa da maquininha de cartão)
+    valor_comissao = Column(Numeric(10, 2), default=0)         # Ex: 100.00 (Repasse do profissional)
+    valor_liquido = Column(Numeric(10, 2), nullable=False)     # Ex: 45.00 (O que sobrou pro Tenant)
+    
+    data_vencimento = Column(DateTime, nullable=False, index=True)
+    data_pagamento = Column(DateTime, nullable=True)
+    
+    status = Column(Enum(TransactionStatus), default=TransactionStatus.PENDENTE, nullable=False)
+    observacoes = Column(Text, nullable=True)

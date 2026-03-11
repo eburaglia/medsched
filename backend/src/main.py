@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, financial, utils, dashboard
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -80,18 +80,24 @@ app.include_router(
     prefix="/api/v1"
 )
 
-app.include_router(
-    financial.router,
-    prefix="/api/v1"
-)
+#app.include_router(
+#    financial.router,
+#    prefix="/api/v1"
+#)
 
 app.include_router(
     utils.router,
     prefix="/api/v1"
 )
 
-# NOVO ROTEADOR: DASHBOARD
 app.include_router(
     dashboard.router,
     prefix="/api/v1"
+)
+
+# O NOVO MOTOR FINANCEIRO E DE COMISSIONAMENTO
+app.include_router(
+    finance.router,
+    prefix="/api/v1/finance",
+    tags=["Financeiro e Caixa"]
 )
