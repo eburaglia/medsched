@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
-import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign } from 'lucide-react'; // 💰 NOVO: DollarSign importado
 
 export default function Layout({ children }) {
   const [role, setRole] = useState('');
@@ -71,6 +71,7 @@ export default function Layout({ children }) {
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
     { name: 'Agenda', icon: Calendar, path: '/agenda', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL', 'CLIENTE'] },
     { name: 'Clientes', icon: UserRound, path: '/clientes', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
+    { name: 'Financeiro', icon: DollarSign, path: '/finance', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] }, // 💰 NOVO: Botão Financeiro
     { name: 'Usuários', icon: Users, path: '/usuarios', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Serviços', icon: BriefcaseMedical, path: '/servicos', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Recursos', icon: Box, path: '/recursos', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
@@ -93,7 +94,7 @@ export default function Layout({ children }) {
 
         <div className={`p-6 border-b border-white/10 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
           <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center text-white font-bold">M</div>
-          {!isCollapsed && <span className="text-xl font-bold text-white">MedSched</span>}
+          {!isCollapsed && <span className="text-xl font-bold text-white">ServiceSchedule</span>}
         </div>
 
         {/* SELETOR DE TENANT (Exclusivo Super Admin) */}
