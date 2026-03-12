@@ -8,7 +8,9 @@ import Resources from './pages/Resources';
 import Customers from './pages/Customers';
 import Tenants from './pages/Tenants';
 import Agenda from './pages/Agenda';
-import Finance from './pages/Finance'; // 💰 NOVO: Importando o Financeiro
+import Finance from './pages/Finance';
+import Settings from './pages/Settings'; 
+import BillingSettings from './pages/BillingSettings';
 
 function App() {
   return (
@@ -24,7 +26,11 @@ function App() {
         <Route path="/recursos" element={<Resources />} />
         <Route path="/clientes" element={<Customers />} />
         <Route path="/tenants" element={<Tenants />} />
-        <Route path="/finance" element={<Finance />} /> {/* 💰 NOVO: Rota do Financeiro */}
+        <Route path="/finance" element={<Finance />} />
+        
+        {/* CONFIGURAÇÕES - AGORA ALINHADO COM O SEU MENU LATERAL */}
+        <Route path="/configuracoes" element={<Settings />} />
+        <Route path="/configuracoes/faturamento" element={<BillingSettings />} />
       </Routes>
     </BrowserRouter>
   );

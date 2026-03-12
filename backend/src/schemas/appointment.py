@@ -1,84 +1,47 @@
-import enum
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 from decimal import Decimal
 
-from src.models.appointment import AppointmentStatus
-
 class AppointmentBase(BaseModel):
-    customer_id: UUID = Field(..., description="ID do cliente/paciente (Tabela customers)")
-    profissional_id: UUID = Field(..., description="ID do profissional (Tabela users)")
-    servico_id: Optional[UUID] = None
-    recurso_id: Optional[UUID] = None
-    data_hora_inicio: datetime = Field(..., description="Data e hora de início (ISO 8601)")
-    data_hora_fim: datetime = Field(..., description="Data e hora de término (ISO 8601)")
-    duracao_aplicada: Optional[int] = Field(None, description="Duração do serviço em minutos no momento do agendamento")
-    preco_aplicado: Optional[Decimal] = Field(None, description="Preço do serviço no momento do agendamento")
-    grupo_recorrencia_id: Optional[UUID] = None
-    observacoes_cliente: Optional[str] = Field(None, description="Observações feitas pelo cliente")
-    observacoes_internas: Optional[str] = Field(None, description="Anotações internas da clínica")
-    tenant_id: UUID = Field(..., description="ID da clínica (Tenant)")
+    customer_id: UUID
+    service_id: UUID
+    data_hora_inicio: datetime
+    data_hora_fim: datetime
+    status: Optional[str] = "agendado"
+    observacoes: Optional[str] = None
+    
+    # Campos Financeiros (Opcionais na criação inicial)
+    metodo_pagamento_previsto: Optional[str] = None
+    convenio_id: Optional[UUID] = None
+    valor_base_servico: Optional[Decimal] = 0.00
+    desconto_manual: Optional[Decimal] = 0.00
+    acrescimo_manual: Optional[Decimal] = 0.00
+    taxa_operadora_aplicada: Optional[Decimal] = 0.00
+    valor_total_previsto: Optional[Decimal] = 0.00
+    faturado: Optional[bool] = False
 
 class AppointmentCreate(AppointmentBase):
-    status: Optional[AppointmentStatus] = Field(default=AppointmentStatus.PENDENTE)
+    tenant_id: UUID
 
 class AppointmentUpdate(BaseModel):
-    customer_id: Optional[UUID] = None
-    profissional_id: Optional[UUID] = None
-    servico_id: Optional[UUID] = None
-    recurso_id: Optional[UUID] = None
-    status: Optional[AppointmentStatus] = None
     data_hora_inicio: Optional[datetime] = None
     data_hora_fim: Optional[datetime] = None
-    duracao_aplicada: Optional[int] = None
-    preco_aplicado: Optional[Decimal] = None
-    observacoes_cliente: Optional[str] = None
-    observacoes_internas: Optional[str] = None
+    status: Optional[str] = None
+    observacoes: Optional[str] = None
+    
+    metodo_pagamento_previsto: Optional[str] = None
+    convenio_id: Optional[UUID] = None
+    valor_base_servico: Optional[Decimal] = None
+    desconto_manual: Optional[Decimal] = None
+    acrescimo_manual: Optional[Decimal] = None
+    taxa_operadora_aplicada: Optional[Decimal] = None
+    valor_total_previsto: Optional[Decimal] = None
+    faturado: Optional[bool] = None
 
 class AppointmentResponse(AppointmentBase):
     id: UUID
-    status: AppointmentStatus
-    
-    # Adicionada a Auditoria Completa
-    criado_em: datetime
-    criado_por: Optional[UUID] = None
-    alterado_em: Optional[datetime] = None
-    alterado_por: Optional[UUID] = None
-    deletado_em: Optional[datetime] = None
-    deletado_por: Optional[UUID] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class FrequenciaRecorrencia(str, enum.Enum):
-    DIARIA = "DIARIA"
-    SEMANAL = "SEMANAL"
-    QUINZENAL = "QUINZENAL"
-    MENSAL = "MENSAL"
-
-class RecorrenciaRegraInput(BaseModel):
-    customer_id: UUID = Field(..., description="ID do paciente")
-    profissional_id: UUID = Field(..., description="ID do profissional")
-    servico_id: Optional[UUID] = None
-    recurso_id: Optional[UUID] = None
-    data_hora_inicio_base: datetime = Field(..., description="Data e hora da primeira sessão")
-    data_hora_fim_base: datetime = Field(..., description="Data e hora de término da primeira sessão")
-    frequencia: FrequenciaRecorrencia = Field(..., description="Frequência das repetições")
-    quantidade_sessoes: int = Field(..., gt=0, le=50, description="Número total de sessões")
-    tenant_id: UUID = Field(..., description="ID da clínica")
-
-class ProjecaoItem(BaseModel):
-    indice: int = Field(..., description="Número da sessão (ex: 1, 2, 3...)")
-    data_hora_inicio: datetime
-    data_hora_fim: datetime
-    disponivel: bool = Field(..., description="True se o horário está livre")
-    conflito_detalhe: Optional[str] = Field(None, description="Mensagem de aviso se ocupado")
-
-class RecorrenciaProjecaoResponse(BaseModel):
-    quantidade_solicitada: int
-    quantidade_disponivel: int
-    sessoes: List[ProjecaoItem]
-
-class RecorrenciaCreateBatch(BaseModel):
-    agendamentos: List[AppointmentCreate] = Field(..., description="Lista final de agendamentos")
+    tenant_id: UUID
+    class Config:
+        from_attributes = True

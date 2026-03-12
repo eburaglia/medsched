@@ -1,39 +1,29 @@
-import enum
-import uuid
-from datetime import datetime
-from sqlalchemy import Column, Integer, Numeric, Text, DateTime, Enum, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
-
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Text, Numeric
+from sqlalchemy.dialects.postgresql import UUID, ENUM
 from src.database import Base
-from src.models.base import AuditoriaMixin
+import uuid
 
-class AppointmentStatus(str, enum.Enum):
-    PENDENTE = "pendente"
-    CONFIRMADO = "confirmado"
-    CONCLUIDO = "concluido"
-    CANCELADO_CLIENTE = "cancelado_cliente"
-    CANCELADO_PROFISSIONAL = "cancelado_profissional"
-    NO_SHOW = "no_show"
-
-# Herdando a AuditoriaMixin para trazer as colunas que criamos no banco
-class Appointment(AuditoriaMixin, Base):
+class Appointment(Base):
     __tablename__ = "appointments"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
-    profissional_id = Column("professional_id", UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    servico_id = Column(UUID(as_uuid=True), nullable=True, index=True)
-    recurso_id = Column(UUID(as_uuid=True), nullable=True, index=True)
-    
-    status = Column(Enum(AppointmentStatus), default=AppointmentStatus.PENDENTE, nullable=False)
+    service_id = Column(UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), nullable=False, index=True)
     
     data_hora_inicio = Column(DateTime, nullable=False, index=True)
-    data_hora_fim = Column(DateTime, nullable=False, index=True)
-    duracao_aplicada = Column(Integer, nullable=True)
-    preco_aplicado = Column(Numeric(10, 2), nullable=True)
-    grupo_recorrencia_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    data_hora_fim = Column(DateTime, nullable=False)
     
-    observacoes_cliente = Column(Text, nullable=True)
-    observacoes_internas = Column(Text, nullable=True)
+    status = Column(String, default="agendado", nullable=False) # agendado, confirmado, cancelado, concluido
+    observacoes = Column(Text, nullable=True)
+    
+    # 💰 NOVAS COLUNAS: Inteligência de Pré-Faturamento
+    metodo_pagamento_previsto = Column(ENUM('PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'DINHEIRO', 'CONVENIO', 'OUTRO', 'TRANSFERENCIA', 'BOLETO', name='paymentmethod', create_type=False), nullable=True)
+    convenio_id = Column(UUID(as_uuid=True), ForeignKey("agreements.id", ondelete="SET NULL"), nullable=True)
+    valor_base_servico = Column(Numeric(10,2), default=0.00)
+    desconto_manual = Column(Numeric(10,2), default=0.00)
+    acrescimo_manual = Column(Numeric(10,2), default=0.00)
+    taxa_operadora_aplicada = Column(Numeric(10,2), default=0.00)
+    valor_total_previsto = Column(Numeric(10,2), default=0.00)
+    faturado = Column(Boolean, default=False)
