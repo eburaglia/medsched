@@ -10,7 +10,7 @@ class TransactionBase(BaseModel):
     status: str
     data_vencimento: date
     metodo_pagamento: Optional[str] = None
-    data_pagamento: Optional[date] = None
+    data_pagamento: Optional[datetime] = None # 🛠️ CORREÇÃO: Mudado para datetime
     customer_id: Optional[UUID] = None
     appointment_id: Optional[UUID] = None
 
@@ -24,7 +24,7 @@ class TransactionUpdate(BaseModel):
     status: Optional[str] = None
     data_vencimento: Optional[date] = None
     metodo_pagamento: Optional[str] = None
-    data_pagamento: Optional[date] = None
+    data_pagamento: Optional[datetime] = None # 🛠️ CORREÇÃO: Mudado para datetime
 
 class TransactionResponse(TransactionBase):
     id: UUID

@@ -15,10 +15,11 @@ class FinancialTransaction(Base):
     descricao = Column(String, nullable=False)
     valor = Column(Numeric(10, 2), nullable=False)
     
-    # 🛠️ CORREÇÃO: Ensinando o vocabulário do ENUM para o Python ler do Banco
     tipo = Column(ENUM('RECEITA', 'DESPESA', name='transactiontype', create_type=False), nullable=False)
     status = Column(ENUM('PAGO', 'PENDENTE', 'CANCELADO', 'ATRASADO', name='transactionstatus', create_type=False), nullable=False)
-    metodo_pagamento = Column(ENUM('PIX', 'DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'TRANSFERENCIA', 'BOLETO', name='paymentmethod', create_type=False), nullable=True)
+    
+    # 🛠️ ATUALIZADO: Agora com as 8 opções completas!
+    metodo_pagamento = Column(ENUM('PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'DINHEIRO', 'CONVENIO', 'OUTRO', 'TRANSFERENCIA', 'BOLETO', name='paymentmethod', create_type=False), nullable=True)
     
     data_vencimento = Column(Date, nullable=False)
     data_pagamento = Column(DateTime, nullable=True)

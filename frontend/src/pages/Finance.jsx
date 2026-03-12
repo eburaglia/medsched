@@ -7,7 +7,7 @@ import Layout from '../components/Layout';
 import { 
   Plus, Loader2, AlertCircle, Search, Download, Edit2, Trash2, 
   Settings2, Clock, Save, Filter, X, Layers, Activity, 
-  ChevronLeft, ChevronRight, Info, Ban, DollarSign
+  ChevronLeft, ChevronRight, Info, Ban, DollarSign, Calendar
 } from 'lucide-react';
 
 export default function Finance() {
@@ -25,6 +25,9 @@ export default function Finance() {
   const [showFilters, setShowFilters] = useState(false);
   const [queryBuilder, setQueryBuilder] = useState({ rootLogic: 'AND', groups: [] });
   
+  // 🌟 NOVO: Estado para o filtro rápido de período
+  const [periodFilter, setPeriodFilter] = useState('mes'); 
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); 
   const [isSaving, setIsSaving] = useState(false);
@@ -88,10 +91,43 @@ export default function Finance() {
   useEffect(() => {
     setCurrentPage(1);
     setSelectedItems([]); 
-  }, [searchTerm, queryBuilder, itemsPerPage]);
+  }, [searchTerm, queryBuilder, periodFilter, itemsPerPage]);
 
   const filteredTransactions = useMemo(() => {
     let result = transactions;
+
+    // 🌟 LÓGICA DO FILTRO RÁPIDO DE DATAS
+    if (periodFilter !== 'tudo') {
+      const getLocalYYYYMMDD = (d) => {
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        return new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
+      };
+      const now = new Date();
+      const todayLocal = getLocalYYYYMMDD(now);
+      
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      const startOfWeekStr = getLocalYYYYMMDD(startOfWeek);
+      
+      const endOfWeek = new Date(now);
+      endOfWeek.setDate(now.getDate() + (6 - now.getDay()));
+      const endOfWeekStr = getLocalYYYYMMDD(endOfWeek);
+
+      const startOfMonthStr = `${todayLocal.substring(0, 8)}01`;
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const endOfMonthStr = getLocalYYYYMMDD(endOfMonth);
+
+      result = result.filter(t => {
+        const itemDate = t.data_vencimento ? t.data_vencimento.substring(0, 10) : '';
+        if (!itemDate) return false;
+
+        if (periodFilter === 'hoje') return itemDate === todayLocal;
+        if (periodFilter === 'semana') return itemDate >= startOfWeekStr && itemDate <= endOfWeekStr;
+        if (periodFilter === 'mes') return itemDate >= startOfMonthStr && itemDate <= endOfMonthStr;
+        return true;
+      });
+    }
+
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(t => 
@@ -148,9 +184,8 @@ export default function Finance() {
       });
     }
     return result;
-  }, [transactions, searchTerm, queryBuilder]);
+  }, [transactions, searchTerm, queryBuilder, periodFilter]);
 
-  // Cálculos dinâmicos com base nos filtros
   const totais = useMemo(() => {
     let receitas = 0;
     let despesas = 0;
@@ -254,8 +289,8 @@ export default function Finance() {
       setModalMode('edit'); setIsModalOpen(true);
     } else if (selectedItems.length > 1) {
       setModalMode('batch-edit'); setBatchToggles({ status: false, tipo: false, metodo_pagamento: false }); 
-      handleOpenCreate(); // Reset fields
-      setModalMode('batch-edit'); // Force batch mode again
+      handleOpenCreate(); 
+      setModalMode('batch-edit'); 
     }
   };
 
@@ -271,7 +306,6 @@ export default function Finance() {
         toast.success("Transação salva com sucesso!"); 
       } 
       else if (modalMode === 'edit') { 
-        // OBS: Precisaremos criar o PUT /api/v1/finance/{id} no backend!
         await api.put(`/finance/${selectedItems[0]}`, payload, { params: { tenant_id: formData.tenant_id } }); 
         toast.success("Transação atualizada!"); 
         setSelectedItems([]); 
@@ -302,7 +336,6 @@ export default function Finance() {
     const loadingToast = toast.loading("Excluindo...");
     try {
       for (const itemId of selectedItems) {
-        // OBS: Precisaremos criar o DELETE /api/v1/finance/{id} no backend!
         await api.delete(`/finance/${itemId}`);
       }
       toast.success("Exclusão concluída.", { id: loadingToast });
@@ -316,7 +349,6 @@ export default function Finance() {
 
   const formatDate = (isoString) => {
     if(!isoString) return '-';
-    // Corrige problema de fuso horário em datas YYYY-MM-DD
     const dateParts = isoString.substring(0, 10).split('-');
     if(dateParts.length === 3) return `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
     return new Date(isoString).toLocaleString('pt-BR');
@@ -352,7 +384,7 @@ export default function Finance() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Data de Vencimento</label>
-                    <input required type="date" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.data_vencimento} onChange={e => setFormData({...formData, data_vencimento: e.target.value})} />
+                    <input required type="date" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.data_vencimento} onChange={e => setFormData({...formData, data_vencimento: e.target.value, data_pagamento: e.target.value})} />
                   </div>
                 </div>
               </fieldset>
@@ -360,9 +392,9 @@ export default function Finance() {
 
             <fieldset className="border border-gray-200 p-4 rounded-xl bg-gray-50/50">
               <legend className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wider">Classificação e Status</legend>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+              <div className="flex flex-col gap-4 mt-2">
                 
-                <div className={`p-3 rounded-lg border ${modalMode === 'batch-edit' && !batchToggles.tipo ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
+                <div className={`p-3 rounded-lg border w-full ${modalMode === 'batch-edit' && !batchToggles.tipo ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
                   {modalMode === 'batch-edit' ? <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.tipo} onChange={e => setBatchToggles({...batchToggles, tipo: e.target.checked})} className="rounded text-blue-600" />Tipo</label> : <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Transação</label>}
                   <select disabled={modalMode === 'batch-edit' && !batchToggles.tipo} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.tipo} onChange={e => setFormData({...formData, tipo: e.target.value})}>
                     <option value="RECEITA">Receita (Entrada)</option>
@@ -370,7 +402,7 @@ export default function Finance() {
                   </select>
                 </div>
 
-                <div className={`p-3 rounded-lg border ${modalMode === 'batch-edit' && !batchToggles.status ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
+                <div className={`p-3 rounded-lg border w-full ${modalMode === 'batch-edit' && !batchToggles.status ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
                   {modalMode === 'batch-edit' ? <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.status} onChange={e => setBatchToggles({...batchToggles, status: e.target.checked})} className="rounded text-blue-600" />Status</label> : <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>}
                   <select disabled={modalMode === 'batch-edit' && !batchToggles.status} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
                     <option value="PAGO">Pago</option>
@@ -380,7 +412,7 @@ export default function Finance() {
                   </select>
                 </div>
 
-                <div className={`p-3 rounded-lg border ${modalMode === 'batch-edit' && !batchToggles.metodo_pagamento ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
+                <div className={`p-3 rounded-lg border w-full ${modalMode === 'batch-edit' && !batchToggles.metodo_pagamento ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
                   {modalMode === 'batch-edit' ? <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.metodo_pagamento} onChange={e => setBatchToggles({...batchToggles, metodo_pagamento: e.target.checked})} className="rounded text-blue-600" />Forma Pagto.</label> : <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagto.</label>}
                   <select disabled={modalMode === 'batch-edit' && !batchToggles.metodo_pagamento} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.metodo_pagamento} onChange={e => setFormData({...formData, metodo_pagamento: e.target.value})}>
                     <option value="PIX">Pix</option>
@@ -389,14 +421,17 @@ export default function Finance() {
                     <option value="CARTAO_DEBITO">Cartão de Débito</option>
                     <option value="TRANSFERENCIA">Transferência</option>
                     <option value="BOLETO">Boleto</option>
+                    <option value="CONVENIO">Convênio</option>
+                    <option value="OUTRO">Outro</option>
                   </select>
                 </div>
 
               </div>
+              
               {modalMode !== 'batch-edit' && formData.status === 'PAGO' && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Data em que foi pago/recebido</label>
-                    <input type="date" className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.data_pagamento || ''} onChange={e => setFormData({...formData, data_pagamento: e.target.value})} />
+                    <input type="date" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={formData.data_pagamento || ''} onChange={e => setFormData({...formData, data_pagamento: e.target.value})} />
                 </div>
               )}
             </fieldset>
@@ -422,12 +457,28 @@ export default function Finance() {
           </form>
         </Modal>
 
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Fluxo de Caixa</h1>
-          <p className="text-gray-500 mt-1">Controle de receitas, despesas, contas a pagar e a receber.</p>
+        {/* 🌟 CABEÇALHO COM OS BOTÕES DE FILTRO RÁPIDO */}
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mb-2">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Fluxo de Caixa</h1>
+            <p className="text-gray-500 mt-1">Controle de receitas, despesas, contas a pagar e a receber.</p>
+          </div>
+          <div className="flex items-center gap-1 bg-gray-200/60 p-1.5 rounded-xl border border-gray-200/50 shadow-inner">
+            <button onClick={() => setPeriodFilter('hoje')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${periodFilter === 'hoje' ? 'bg-white text-blue-700 shadow border border-gray-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'}`}>
+              <Calendar className="w-3.5 h-3.5" /> Hoje
+            </button>
+            <button onClick={() => setPeriodFilter('semana')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${periodFilter === 'semana' ? 'bg-white text-blue-700 shadow border border-gray-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'}`}>
+              <Calendar className="w-3.5 h-3.5" /> Semana
+            </button>
+            <button onClick={() => setPeriodFilter('mes')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${periodFilter === 'mes' ? 'bg-white text-blue-700 shadow border border-gray-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'}`}>
+              <Calendar className="w-3.5 h-3.5" /> Mês
+            </button>
+            <button onClick={() => setPeriodFilter('tudo')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${periodFilter === 'tudo' ? 'bg-white text-blue-700 shadow border border-gray-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'}`}>
+              <Filter className="w-3.5 h-3.5" /> Outro
+            </button>
+          </div>
         </div>
 
-        {/* CARDS DINÂMICOS BASEADOS NOS FILTROS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-500 relative overflow-hidden">
             <DollarSign className="absolute right-4 top-6 w-12 h-12 text-green-100 opacity-50" />
@@ -455,7 +506,7 @@ export default function Finance() {
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input type="text" placeholder="Pesquisa rápida (Descrição, ID)..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm" />
               </div>
-              <button onClick={() => { setShowFilters(!showFilters); if(!showFilters && queryBuilder.groups.length === 0) addGroup(); }} className={`p-2 rounded-lg border transition-colors flex items-center gap-2 ${showFilters || totalActiveRules > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+              <button onClick={() => { setShowFilters(!showFilters); if(!showFilters && queryBuilder.groups.length === 0) addGroup(); setPeriodFilter('tudo'); }} className={`p-2 rounded-lg border transition-colors flex items-center gap-2 ${showFilters || totalActiveRules > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <Filter className="w-5 h-5" />
                 {totalActiveRules > 0 && <span className="bg-blue-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalActiveRules}</span>}
               </button>
@@ -557,7 +608,7 @@ export default function Finance() {
                                 <option value="">Selecione...</option>
                                 {rule.column === 'tipo' && <><option value="RECEITA">Receita</option><option value="DESPESA">Despesa</option></>}
                                 {rule.column === 'status' && <><option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option><option value="ATRASADO">Atrasado</option><option value="CANCELADO">Cancelado</option></>}
-                                {rule.column === 'metodo_pagamento' && <><option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="CARTAO_CREDITO">Cartão de Crédito</option></>}
+                                {rule.column === 'metodo_pagamento' && <><option value="PIX">Pix</option><option value="DINHEIRO">Dinheiro</option><option value="CARTAO_CREDITO">Cartão de Crédito</option><option value="CARTAO_DEBITO">Cartão de Débito</option><option value="TRANSFERENCIA">Transferência</option><option value="BOLETO">Boleto</option><option value="CONVENIO">Convênio</option><option value="OUTRO">Outro</option></>}
                               </select>
                             ) : isDateCol ? (
                               <input type="date" className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={rule.value} onChange={e => updateRule(group.id, rule.id, 'value', e.target.value)} />
