@@ -1,10 +1,11 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Text, Numeric
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Text, Numeric, Integer
 from sqlalchemy.dialects.postgresql import UUID, ENUM
 from src.database import Base
 import uuid
 import enum
+from datetime import datetime
 
-# CORREÇÃO AQUI: Valores das strings alinhados com o Banco de Dados (Maiúsculo)
+# Valores das strings alinhados com o Banco de Dados (Maiúsculo)
 class AppointmentStatus(str, enum.Enum):
     PENDENTE = "PENDENTE"
     CONFIRMADO = "CONFIRMADO"
@@ -30,10 +31,11 @@ class Appointment(Base):
     status = Column(String, default=AppointmentStatus.PENDENTE, nullable=False)
     observacoes_internas = Column(Text, nullable=True)
     
+    # Ajuste DRCODE: Respeitando a regra de NOT NULL do banco para as datas de auditoria
     criado_por = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     alterado_por = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    criado_em = Column(DateTime, nullable=True)
-    alterado_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+    alterado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     deletado_em = Column(DateTime, nullable=True)
 
     metodo_pagamento_previsto = Column(ENUM('PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'DINHEIRO', 'CONVENIO', 'OUTRO', 'TRANSFERENCIA', 'BOLETO', name='paymentmethod', create_type=False), nullable=True)
@@ -44,3 +46,11 @@ class Appointment(Base):
     taxa_operadora_aplicada = Column(Numeric(10,2), default=0.00)
     valor_total_previsto = Column(Numeric(10,2), default=0.00)
     faturado = Column(Boolean, default=False)
+
+    # Colunas legadas mantidas como nulas para evitar exclusão acidental no banco
+    recurso_id = Column(UUID(as_uuid=True), index=True, nullable=True)
+    deletado_por = Column(UUID(as_uuid=True), nullable=True)
+    observacoes_cliente = Column(Text, nullable=True)
+    preco_aplicado = Column(Numeric(10,2), nullable=True)
+    duracao_aplicada = Column(Integer, nullable=True)
+

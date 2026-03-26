@@ -8,13 +8,12 @@ import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save } from '
 export default function Settings() {
   const navigate = useNavigate();
   
+  // DRCODE: Estados para controlar a Identidade Visual
   const [corPrimaria, setCorPrimaria] = useState('#0f172a');
   const [tenantId, setTenantId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  
-  // DRCODE: Precisamos guardar os dados inteiros do Tenant para o PUT
-  const [fullTenantData, setFullTenantData] = useState(null);
 
+  // DRCODE: Busca a cor atual da clínica quando a tela abre
   useEffect(() => {
     const token = localStorage.getItem('medsched_token');
     if (token) {
@@ -26,9 +25,6 @@ export default function Settings() {
         if (targetId) {
           setTenantId(targetId);
           api.get(`/tenants/${targetId}`).then(res => {
-            // DRCODE: Guarda os dados completos para usar no PUT mais tarde
-            setFullTenantData(res.data);
-            
             const configVisuais = res.data.configuracoes_visuais || {};
             if (configVisuais.cor_primaria) {
               setCorPrimaria(configVisuais.cor_primaria);
@@ -41,20 +37,15 @@ export default function Settings() {
     }
   }, []);
 
-  // DRCODE: Ajustado para usar PUT e enviar os dados completos, conforme exige o backend
+  // DRCODE: Salva a nova cor no banco de dados e recarrega a tela
   const salvarCores = async () => {
-    if (!tenantId || !fullTenantData) return;
+    if (!tenantId) return;
     setIsSaving(true);
-    
     try {
-      // Cria um objeto mesclando os dados antigos com a nova cor
-      const dadosAtualizados = {
-        ...fullTenantData,
+      // Envia apenas o campo configuracoes_visuais para a API
+      await api.patch(`/tenants/${tenantId}`, {
         configuracoes_visuais: { cor_primaria: corPrimaria }
-      };
-
-      // Usa PUT em vez de PATCH
-      await api.put(`/tenants/${tenantId}`, dadosAtualizados);
+      });
       
       // Recarrega a página para que o Layout pegue a nova cor
       window.location.reload(); 
@@ -129,7 +120,7 @@ export default function Settings() {
           ))}
         </div>
 
-        {/* DRCODE: SEÇÃO DE IDENTIDADE VISUAL */}
+        {/* DRCODE: NOVA SEÇÃO DE IDENTIDADE VISUAL */}
         <div className="mt-4 bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
             <Palette className="w-6 h-6 text-blue-600" />
@@ -155,8 +146,8 @@ export default function Settings() {
             
             <button
               onClick={salvarCores}
-              disabled={isSaving || !fullTenantData}
-              className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSaving}
+              className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
             >
               <Save className="w-5 h-5" />
               {isSaving ? "Salvando..." : "Salvar Configuração"}

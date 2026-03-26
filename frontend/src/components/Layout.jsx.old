@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
-import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign } from 'lucide-react'; // 💰 NOVO: DollarSign importado
 
 export default function Layout({ children }) {
   const [role, setRole] = useState('');
   const [userName, setUserName] = useState('Carregando...');
   const [isCollapsed, setIsCollapsed] = useState(false);
-  
-  // Cor padrão do sistema caso o cliente não tenha configurado uma
-  const [themeColor, setThemeColor] = useState('#0f172a'); 
+  const [themeColor, setThemeColor] = useState('#0f172a');
   
   // Estados para o Seletor de Clínicas (Super Admin)
   const [tenants, setTenants] = useState([]);
@@ -45,24 +43,11 @@ export default function Layout({ children }) {
             });
         }
 
-        // 👇 MÁGICA DRCODE: Busca as configurações visuais e injeta no CSS global
+        // Busca cor da clínica (Usuários normais ou se o Super Admin selecionou uma)
         const targetTenant = decoded.tenant_id || selectedTenant;
         if (targetTenant) {
           api.get(`/tenants/${targetTenant}`)
-            .then(res => {
-              // Pegamos o JSON inteiro que configuramos no backend
-              const configVisuais = res.data.configuracoes_visuais || {};
-              
-              // Extraímos a cor (se existir)
-              const corPrimaria = configVisuais.cor_primaria;
-              
-              if (corPrimaria) {
-                setThemeColor(corPrimaria); // Pinta o menu lateral
-                
-                // Cria uma variável global no CSS para que qualquer tela possa usar var(--cor-primaria)
-                document.documentElement.style.setProperty('--cor-primaria', corPrimaria);
-              }
-            })
+            .then(res => res.data.cor_primaria && setThemeColor(res.data.cor_primaria))
             .catch(() => {});
         }
       } catch (e) {
@@ -86,7 +71,7 @@ export default function Layout({ children }) {
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
     { name: 'Agenda', icon: Calendar, path: '/agenda', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL', 'CLIENTE'] },
     { name: 'Clientes', icon: UserRound, path: '/clientes', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
-    { name: 'Financeiro', icon: DollarSign, path: '/finance', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
+    { name: 'Financeiro', icon: DollarSign, path: '/finance', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] }, // 💰 NOVO: Botão Financeiro
     { name: 'Usuários', icon: Users, path: '/usuarios', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Serviços', icon: BriefcaseMedical, path: '/servicos', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Recursos', icon: Box, path: '/recursos', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
@@ -103,11 +88,7 @@ export default function Layout({ children }) {
         className={`${isCollapsed ? 'w-20' : 'w-64'} text-slate-200 flex flex-col shadow-xl z-20 transition-all duration-300 relative`}
         style={{ backgroundColor: themeColor }}
       >
-        <button 
-          onClick={() => setIsCollapsed(!isCollapsed)} 
-          className="absolute -right-3 top-8 text-white rounded-full p-1 shadow-lg z-30"
-          style={{ backgroundColor: themeColor, filter: 'brightness(1.2)' }} // O botão herda a cor, mas fica um pouco mais claro
-        >
+        <button onClick={() => setIsCollapsed(!isCollapsed)} className="absolute -right-3 top-8 bg-blue-600 text-white rounded-full p-1 shadow-lg z-30">
           {isCollapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
 

@@ -17,6 +17,9 @@ router = APIRouter()
 require_super_admin = RoleChecker(["SUPER_ADMIN", "SYSTEM_ADMIN"])
 require_leitura_tenant = RoleChecker(["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN", "GESTOR", "PROFISSIONAL"])
 
+# DRCODE NOVO: Permissão específica para quem pode editar as configurações da clínica
+require_edicao_tenant = RoleChecker(["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN"])
+
 @router.post("/", response_model=schemas.TenantResponse, status_code=status.HTTP_201_CREATED)
 def create_tenant(
     tenant: schemas.TenantCreate, 
@@ -65,8 +68,14 @@ def update_tenant(
     tenant_id: UUID, 
     tenant: schemas.TenantUpdate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_super_admin)
+    current_user: User = Depends(require_edicao_tenant) # DRCODE AJUSTE: Permite Administrador da Clínica
 ):
+    # DRCODE AJUSTE: Blindagem para garantir que o TENANT_ADMIN só edite a própria clínica
+    papel = current_user.papel.value if hasattr(current_user.papel, 'value') else current_user.papel
+    if papel not in ["SUPER_ADMIN", "SYSTEM_ADMIN"]:
+        if current_user.tenant_id != tenant_id:
+            raise HTTPException(status_code=403, detail="Acesso negado. Você só pode editar as configurações da sua própria clínica.")
+
     db_tenant = crud.get_tenant(db, tenant_id=tenant_id)
     if db_tenant is None:
         raise HTTPException(status_code=404, detail="Clínica não encontrada.")

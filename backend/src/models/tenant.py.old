@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, String, Integer, Text, DateTime, Enum, Identity, JSON
+from sqlalchemy import Column, String, Integer, Text, DateTime, Enum, Identity
 from src.database import Base
 from src.models.base import AuditoriaMixin
 
@@ -37,9 +37,6 @@ class Tenant(AuditoriaMixin, Base):
     dominio_interno = Column(String(100), unique=True, index=True, nullable=False)
     url_externa = Column(String(255), nullable=False)
     logotipo_url = Column(String(500), nullable=False)
-
-    # Configurações de Identidade Visual (Cores, fontes, etc)
-    configuracoes_visuais = Column(JSON, nullable=True, default=dict)
 
     validade_assinatura = Column(DateTime, nullable=False)
     observacoes = Column(Text, nullable=True)

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from src.models.tenant import TenantStatus
@@ -27,6 +27,9 @@ class TenantBase(BaseModel):
     logotipo_url: str = Field(..., max_length=500)
     observacoes: Optional[str] = None
     status: Optional[TenantStatus] = Field(default=TenantStatus.PHASE_IN)
+    
+    # NOVO DRCODE: Campo que aceita qualquer estrutura JSON para cores e identidade
+    configuracoes_visuais: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 class TenantCreate(TenantBase):
     validade_assinatura: datetime
@@ -55,6 +58,9 @@ class TenantUpdate(BaseModel):
     observacoes: Optional[str] = None
     status: Optional[TenantStatus] = None
     validade_assinatura: Optional[datetime] = None
+    
+    # NOVO DRCODE: Permite atualizar as cores e a identidade do Tenant
+    configuracoes_visuais: Optional[Dict[str, Any]] = None
 
 class TenantResponse(TenantBase):
     id: UUID
@@ -63,14 +69,14 @@ class TenantResponse(TenantBase):
     
     criado_em: datetime
     criado_por: Optional[UUID] = None
-    criado_por_nome: Optional[str] = None  # NOVO: Nome do Criador
+    criado_por_nome: Optional[str] = None  # Nome do Criador
     
     alterado_em: Optional[datetime] = None
     alterado_por: Optional[UUID] = None
-    alterado_por_nome: Optional[str] = None # NOVO: Nome do Alterador
+    alterado_por_nome: Optional[str] = None # Nome do Alterador
     
     deletado_em: Optional[datetime] = None
     deletado_por: Optional[UUID] = None
-    deletado_por_nome: Optional[str] = None # NOVO: Nome do Deletador
+    deletado_por_nome: Optional[str] = None # Nome do Deletador
 
     model_config = ConfigDict(from_attributes=True)
