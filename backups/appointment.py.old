@@ -5,7 +5,7 @@ import uuid
 import enum
 from datetime import datetime
 
-# Valores das strings alinhados com o Banco de Dados (Maiúsculo)
+# CORREÇÃO AQUI: Valores das strings alinhados com o Banco de Dados (Maiúsculo)
 class AppointmentStatus(str, enum.Enum):
     PENDENTE = "PENDENTE"
     CONFIRMADO = "CONFIRMADO"
@@ -47,10 +47,9 @@ class Appointment(Base):
     valor_total_previsto = Column(Numeric(10,2), default=0.00)
     faturado = Column(Boolean, default=False)
 
-    # Colunas legadas mantidas como nulas para evitar exclusão acidental no banco
+    # Colunas legadas mantidas para evitar exclusão acidental no banco
     recurso_id = Column(UUID(as_uuid=True), index=True, nullable=True)
     deletado_por = Column(UUID(as_uuid=True), nullable=True)
     observacoes_cliente = Column(Text, nullable=True)
     preco_aplicado = Column(Numeric(10,2), nullable=True)
     duracao_aplicada = Column(Integer, nullable=True)
-

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance, billing
+# 👇 DRCODE NOVO: Adicionamos o 'waitlist' no final desta linha de importação
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance, billing, waitlist
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -80,11 +81,6 @@ app.include_router(
     prefix="/api/v1"
 )
 
-#app.include_router(
-#    financial.router,
-#    prefix="/api/v1"
-#)
-
 app.include_router(
     utils.router,
     prefix="/api/v1"
@@ -102,10 +98,16 @@ app.include_router(
     tags=["Financeiro e Caixa"]
 )
 
-
 # MOTOR DE REGRAS DE COBRANÇA E PARCERIAS
 app.include_router(
     billing.router,
     prefix="/api/v1/billing",
     tags=["Faturamento e Parcerias"]
+)
+
+# 👇 DRCODE NOVO: O Roteador da Fila de Espera!
+app.include_router(
+    waitlist.router,
+    prefix="/api/v1/waitlists",
+    tags=["Fila de Espera"]
 )

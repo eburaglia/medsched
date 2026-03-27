@@ -31,7 +31,10 @@ class Appointment(Base):
     status = Column(String, default=AppointmentStatus.PENDENTE, nullable=False)
     observacoes_internas = Column(Text, nullable=True)
     
-    # Ajuste DRCODE: Respeitando a regra de NOT NULL do banco para as datas de auditoria
+    # NOVO DRCODE: O "carimbo" que define se este agendamento é um encaixe
+    is_encaixe = Column(Boolean, default=False, nullable=False)
+    
+    # Respeitando a regra de NOT NULL do banco para as datas de auditoria
     criado_por = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     alterado_por = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -53,4 +56,3 @@ class Appointment(Base):
     observacoes_cliente = Column(Text, nullable=True)
     preco_aplicado = Column(Numeric(10,2), nullable=True)
     duracao_aplicada = Column(Integer, nullable=True)
-

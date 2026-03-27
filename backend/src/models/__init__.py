@@ -15,6 +15,9 @@ from src.models.billing import PaymentFee, Agreement, ServiceAgreementPrice
 # Agora sim, os agendamentos podem usar a tabela de agreements
 from src.models.appointment import Appointment
 
+# 👇 DRCODE NOVO: Importando a Fila de Espera logo após os Agendamentos
+from src.models.waitlist import Waitlist
+
 # A Tabela de Backoffice (Isolada do ecossistema de Tenants)
 from src.models.super_admin import SuperAdmin
 
