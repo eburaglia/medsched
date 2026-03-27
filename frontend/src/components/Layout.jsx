@@ -3,6 +3,7 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from './Modal';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, 
   ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign, 
@@ -15,19 +16,28 @@ export default function Layout({ children }) {
   const [userId, setUserId] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   
-  // Controle de Cores e FOUC (Piscar)
-  const [themeColor, setThemeColor] = useState('#0f172a'); 
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Controle de Cores e FOUC (Piscar) - Agora lê do LocalStorage no primeiro milissegundo
+  const [themeColor, setThemeColor] = useState(localStorage.getItem('saved_theme_color') || '#0f172a'); 
   const [isThemeLoaded, setIsThemeLoaded] = useState(false);
   
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(localStorage.getItem('selected_tenant_id') || '');
 
-  // ESTADOS DA TROCA DE SENHA OBRIGATÓRIA
+  // ESTADOS DA TROCA DE SENHA
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ senhaAtual: '', novaSenha: '', confirmarNovaSenha: '' });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
+    // Aplica a cor imediatamente se já estiver no LocalStorage para evitar a piscada
+    const savedColor = localStorage.getItem('saved_theme_color');
+    if (savedColor) {
+        document.documentElement.style.setProperty('--cor-primaria', savedColor);
+    }
+
     const fetchUserDataAndTheme = async () => {
         const token = localStorage.getItem('medsched_token');
         if (!token) return;
@@ -41,7 +51,10 @@ export default function Layout({ children }) {
             if (['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(tokenRole)) {
                 setUserName('Administrador');
                 setRole(tokenRole);
-                setThemeColor('#1e1e1e');
+                const adminColor = '#1e1e1e';
+                setThemeColor(adminColor);
+                localStorage.setItem('saved_theme_color', adminColor);
+                document.documentElement.style.setProperty('--cor-primaria', adminColor);
                 setIsThemeLoaded(true);
                 api.get('/tenants').then(res => setTenants(res.data)).catch(() => {});
                 return;
@@ -66,6 +79,7 @@ export default function Layout({ children }) {
                     const corPrimaria = configVisuais.cor_primaria;
                     if (corPrimaria) {
                         setThemeColor(corPrimaria); 
+                        localStorage.setItem('saved_theme_color', corPrimaria);
                         document.documentElement.style.setProperty('--cor-primaria', corPrimaria);
                     }
                 } catch(e) {}
@@ -73,8 +87,7 @@ export default function Layout({ children }) {
         } catch (e) {
             console.error("Erro no token", e);
         } finally {
-            // Atraso sutil para garantir que o CSS aplique a cor antes de renderizar a tela, matando o piscar.
-            setTimeout(() => setIsThemeLoaded(true), 100);
+            setIsThemeLoaded(true);
         }
     };
     fetchUserDataAndTheme();
@@ -84,8 +97,16 @@ export default function Layout({ children }) {
     const id = e.target.value;
     if (id === "") {
       localStorage.removeItem('selected_tenant_id');
+      localStorage.removeItem('saved_theme_color');
     } else {
       localStorage.setItem('selected_tenant_id', id);
+      // Pega a cor do tenant selecionado na lista (se disponível) para trocar instantaneamente
+      const selectedT = tenants.find(t => t.id === id);
+      if (selectedT && selectedT.configuracoes_visuais?.cor_primaria) {
+          localStorage.setItem('saved_theme_color', selectedT.configuracoes_visuais.cor_primaria);
+      } else {
+          localStorage.removeItem('saved_theme_color');
+      }
     }
     setSelectedTenant(id);
     window.location.reload(); 
@@ -101,7 +122,8 @@ export default function Layout({ children }) {
     { name: 'Recursos', icon: Box, path: '/recursos', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Relatórios', icon: FileText, path: '/relatorios', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Configurações', icon: Settings, path: '/configuracoes', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN'] },
-    { name: 'Gestão de Clínicas', icon: Building2, path: '/tenants', roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+    { name: 'Gestão Global', icon: Building2, path: '/tenants', roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+    { name: 'Atendimentos', icon: FileText, path: '/atendimentos', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
   ];
 
   const allowedMenus = menuItems.filter(item => item.roles.includes(role));
@@ -129,6 +151,12 @@ export default function Layout({ children }) {
       }
   };
 
+  const handleLogout = () => {
+      localStorage.clear();
+      // Como o logout reseta tudo, aí sim usamos o recarregamento total
+      window.location.href = '/login';
+  };
+
   if (!isThemeLoaded) {
       return (
           <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -142,7 +170,6 @@ export default function Layout({ children }) {
     <div className="flex h-screen bg-gray-50 font-sans">
       <Toaster position="top-right" />
       
-      {/* MODAL DE TROCA DE SENHA VOLUNTÁRIA/OBRIGATÓRIA */}
       <Modal isOpen={isChangePasswordModalOpen} onClose={() => setIsChangePasswordModalOpen(false)} title="Alterar Senha de Acesso">
           <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-start gap-3">
@@ -197,14 +224,14 @@ export default function Layout({ children }) {
         {!isCollapsed && (role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN') && (
           <div className="px-4 py-4 border-b border-white/10 bg-black/10">
             <label className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1 mb-2">
-              <Globe className="w-3 h-3" /> Visão da Clínica
+              <Globe className="w-3 h-3" /> Visão Global
             </label>
             <select 
               value={selectedTenant}
               onChange={handleTenantChange}
               className="w-full bg-white/10 border border-white/20 rounded px-2 py-1.5 text-xs text-white outline-none focus:bg-white/20 transition-all cursor-pointer"
             >
-              <option value="" className="text-gray-900">-- Visão Global --</option>
+              <option value="" className="text-gray-900">-- Todas as Instâncias --</option>
               {tenants.map(t => (
                 <option key={t.id} value={t.id} className="text-gray-900">{t.nome_fantasia || t.razao_social}</option>
               ))}
@@ -213,11 +240,16 @@ export default function Layout({ children }) {
         )}
         
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+          {/* 👇 DRCODE: Troca mágica de <a href> para <Link to>. Sem mais recarregamentos! */}
           {allowedMenus.map((item) => (
-            <a key={item.name} href={item.path} className={`flex items-center gap-3 py-2.5 px-4 rounded-lg transition-all ${window.location.pathname === item.path ? 'bg-white/20 text-white shadow-md' : 'hover:bg-black/10 text-white/80 hover:text-white'}`}>
+            <Link 
+              key={item.name} 
+              to={item.path} 
+              className={`flex items-center gap-3 py-2.5 px-4 rounded-lg transition-all ${location.pathname === item.path ? 'bg-white/20 text-white shadow-md' : 'hover:bg-black/10 text-white/80 hover:text-white'}`}
+            >
               <item.icon className="w-5 h-5 flex-shrink-0" />
               {!isCollapsed && <span className="text-sm font-medium">{item.name}</span>}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -227,14 +259,13 @@ export default function Layout({ children }) {
             <p className="text-[10px] text-white/50 uppercase tracking-widest">{role.replace('_', ' ')}</p>
           </div>
           
-          {/* DRCODE: Botão de Trocar Senha Voluntária do próprio usuário no Menu */}
           {!isCollapsed && (
              <button onClick={() => setIsChangePasswordModalOpen(true)} className="w-full flex items-center gap-2 py-2 px-3 text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all text-left">
                 <KeyRound className="w-4 h-4" /> Alterar minha Senha
              </button>
           )}
 
-          <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="w-full flex items-center justify-center gap-2 py-2 text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 rounded-lg border border-white/10 transition-all mt-1">
+          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2 text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 rounded-lg border border-white/10 transition-all mt-1">
             <LogOut className="w-4 h-4" /> {!isCollapsed && "SAIR"}
           </button>
         </div>

@@ -1,21 +1,12 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Union
+from typing import Optional
 from uuid import UUID
 from datetime import datetime
 from src.models.service_record import ServiceRecordType
 
-# 👇 Estrutura que ensina a API o que é um Anexo
-class AnexoItem(BaseModel):
-    id_temp: Optional[Union[str, float]] = None # Opcional, gerado pelo React
-    nome_arquivo: str
-    tipo_arquivo: str
-    dados_base64: str
-
 class ServiceRecordBase(BaseModel):
     tipo: ServiceRecordType = Field(default=ServiceRecordType.NOTA_SESSAO, description="O tipo do registro (avaliação, nota, etc)")
     conteudo: str = Field(..., min_length=5, description="O texto detalhado do atendimento ou evolução")
-    # A lista de anexos passa a ser validada automaticamente
-    anexos: Optional[List[AnexoItem]] = Field(default=[], description="Lista de arquivos anexados (em Base64)")
 
 class ServiceRecordCreate(ServiceRecordBase):
     tenant_id: UUID
@@ -24,9 +15,9 @@ class ServiceRecordCreate(ServiceRecordBase):
     appointment_id: Optional[UUID] = Field(default=None, description="Opcional: O ID do agendamento vinculado a esta ficha")
 
 class ServiceRecordUpdate(BaseModel):
+    # Uma vez criada, geralmente só alteramos o conteúdo ou a assinamos digitalmente
     conteudo: Optional[str] = Field(default=None, min_length=5)
     assinado: Optional[bool] = Field(default=None, description="Trava a ficha contra edições futuras")
-    anexos: Optional[List[AnexoItem]] = Field(default=None, description="Lista atualizada de arquivos anexados")
 
 class ServiceRecordResponse(ServiceRecordBase):
     id: UUID

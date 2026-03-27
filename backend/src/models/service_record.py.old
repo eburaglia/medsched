@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Boolean
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
 
@@ -36,9 +36,6 @@ class ServiceRecord(Base):
     # Conteúdo
     tipo = Column(Enum(ServiceRecordType), default=ServiceRecordType.NOTA_SESSAO, nullable=False)
     conteudo = Column(Text, nullable=False)
-    
-    # 👇 A Coluna Mágica de Anexos: Guarda o Base64 nativamente e de forma estruturada!
-    anexos = Column(JSONB, default=list, nullable=True)
     
     # Segurança / Assinatura Eletrônica
     assinado = Column(Boolean, default=False, nullable=False)

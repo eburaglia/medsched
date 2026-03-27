@@ -12,8 +12,8 @@ import Finance from './pages/Finance';
 import Settings from './pages/Settings'; 
 import BillingSettings from './pages/BillingSettings';
 
-// 👇 DRCODE NOVO: Importando a página da Fila de Espera
-import Waitlist from './pages/Waitlist';
+// 👇 DRCODE: Importando a novíssima página de Registros de Serviço / Atendimentos
+import ServiceRecords from './pages/ServiceRecords';
 
 // Importando o nosso guarda-costas de rotas
 import ProtectedRoute from './components/ProtectedRoute';
@@ -33,10 +33,10 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* 👇 DRCODE NOVO: A Porta de Entrada para a Fila de Espera */}
-        <Route path="/espera" element={
-          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL', 'CLIENTE']}>
-            <Waitlist />
+        {/* 👇 DRCODE: A Porta de Entrada para a Execução do Serviço */}
+        <Route path="/atendimentos" element={
+          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL']}>
+            <ServiceRecords />
           </ProtectedRoute>
         } />
         
@@ -45,7 +45,7 @@ function App() {
             <Dashboard />
           </ProtectedRoute>
         } />
-
+          
         <Route path="/clientes" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL']}>
             <Customers />
