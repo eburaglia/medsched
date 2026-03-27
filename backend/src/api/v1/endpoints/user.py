@@ -1,13 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timedelta
+import random
+import string
+
+from pydantic import BaseModel
 
 from src.database import get_db
 from src.schemas.user import UserCreate, UserUpdate, UserResponse
 from src.crud import user as crud_user
 from src.api.deps import get_current_user, RoleChecker
 from src.models.user import User
+# 👇 DRCODE: Adicionado o verify_password para a rota de troca de senha
+from src.core.security import get_password_hash, verify_password
 
 # ---------------------------------------------------------
 # 🚦 CONFIGURAÇÃO DO ROTEADOR E SEGURANÇA
@@ -17,16 +24,20 @@ router = APIRouter(
     tags=["Usuários"]
 )
 
-# A CORREÇÃO DE OURO: Permitindo os administradores da plataforma
+# Permitindo os administradores da plataforma
 require_admin_or_tenant = RoleChecker(["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN", "GESTOR"])
+
+class ResetPasswordRequest(BaseModel):
+    nova_senha: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    senha_atual: str
+    nova_senha: str
 
 # Função utilitária para checar a Impersonação
 def verify_tenant_access(current_user: User, target_tenant_id: UUID):
-    # Se for super_admin ou system_admin, tem o passe livre (Impersonação)
     if current_user.papel in ["SUPER_ADMIN", "SYSTEM_ADMIN"]:
         return True
-    
-    # Se for tenant_admin normal, ele SÓ PODE mexer na própria clínica
     if str(current_user.tenant_id) != str(target_tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -87,10 +98,7 @@ def read_user(
 
     user = crud_user.get_user_by_id(db=db, user_id=user_id, tenant_id=tenant_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuário não encontrado."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
     return user
 
 # ---------------------------------------------------------
@@ -108,10 +116,103 @@ def update_user(
 
     user = crud_user.get_user_by_id(db=db, user_id=user_id, tenant_id=tenant_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuário não encontrado."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
     
     user_updated = crud_user.update_user(db=db, db_user=user, obj_in=user_in)
     return user_updated
+
+# ---------------------------------------------------------
+# 🔑 ENDPOINT: ALTERAR PRÓPRIA SENHA (Definitiva)
+# ---------------------------------------------------------
+@router.post("/{user_id}/change-password")
+def change_password(
+    user_id: UUID,
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Regra Básica: Só posso trocar a minha própria senha
+    if str(current_user.id) != str(user_id):
+        raise HTTPException(status_code=403, detail="Você só pode alterar a sua própria senha.")
+
+    # 1. Verifica se a senha informada bate com a Oficial
+    is_valid = verify_password(payload.senha_atual, current_user.senha_hash)
+    
+    # 2. Se falhar, verifica se bate com a Temporária e se está no prazo (2 Horas)
+    if not is_valid and current_user.recuperacao_token and current_user.recuperacao_expira:
+        if datetime.utcnow() <= current_user.recuperacao_expira:
+            is_valid = verify_password(payload.senha_atual, current_user.recuperacao_token)
+
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="A senha atual/temporária está incorreta ou expirada.")
+
+    if len(payload.nova_senha) < 8:
+        raise HTTPException(status_code=400, detail="A nova senha deve ter pelo menos 8 caracteres.")
+
+    # 3. Sucesso! Grava a nova senha definitiva e destrói os rastros da temporária
+    current_user.senha_hash = get_password_hash(payload.nova_senha)
+    current_user.recuperacao_token = None
+    current_user.recuperacao_expira = None
+    db.commit()
+
+    return {"message": "Senha alterada com sucesso!"}
+
+# ---------------------------------------------------------
+# 🔐 ENDPOINT: RESET DE SENHA COM HIERARQUIA (RBAC)
+# ---------------------------------------------------------
+@router.post("/{user_id}/reset-password")
+def reset_user_password(
+    user_id: UUID,
+    tenant_id: UUID,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Todos passam, a validação é interna
+):
+    verify_tenant_access(current_user, tenant_id)
+    target_user = crud_user.get_user_by_id(db, user_id=user_id, tenant_id=tenant_id)
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    papel_atual = current_user.papel if isinstance(current_user.papel, str) else current_user.papel.value
+    papel_alvo = target_user.papel if isinstance(target_user.papel, str) else target_user.papel.value
+    is_self = str(current_user.id) == str(target_user.id)
+    
+    has_permission = False
+    if papel_atual in ["SUPER_ADMIN", "SYSTEM_ADMIN"]:
+        has_permission = True
+    elif papel_atual == "TENANT_ADMIN":
+        if is_self or papel_alvo in ["GESTOR", "PROFISSIONAL", "CLIENTE"]:
+            has_permission = True
+    elif papel_atual == "GESTOR":
+        if is_self or papel_alvo == "CLIENTE":
+            has_permission = True
+    elif papel_atual == "CLIENTE":
+        if is_self:
+            has_permission = True
+            
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Você não tem nível hierárquico para resetar a senha deste perfil.")
+
+    if papel_atual in ["SUPER_ADMIN", "SYSTEM_ADMIN"] and payload.nova_senha:
+        if len(payload.nova_senha) < 8:
+            raise HTTPException(status_code=400, detail="A senha explícita deve ter pelo menos 8 caracteres.")
+        
+        target_user.senha_hash = get_password_hash(payload.nova_senha)
+        target_user.recuperacao_token = None
+        target_user.recuperacao_expira = None
+        senha_gerada = payload.nova_senha
+    else:
+        caracteres = string.ascii_letters + string.digits + "@!#$"
+        senha_gerada = ''.join(random.choice(caracteres) for i in range(10))
+        
+        target_user.recuperacao_token = get_password_hash(senha_gerada)
+        target_user.recuperacao_expira = datetime.utcnow() + timedelta(hours=2)
+
+    db.commit()
+    
+    return {
+        "message": "Senha gerada com sucesso", 
+        "senha_temporaria": senha_gerada, 
+        "is_temporaria": not (papel_atual in ["SUPER_ADMIN", "SYSTEM_ADMIN"] and payload.nova_senha)
+    }

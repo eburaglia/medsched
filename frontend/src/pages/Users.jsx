@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import api from '../services/api';
 import { jwtDecode } from 'jwt-decode';
 import { Toaster, toast } from 'react-hot-toast';
@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, MapPin, ChevronUp, ChevronDown
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, MapPin, ChevronUp, ChevronDown, CheckCircle
 } from 'lucide-react';
 
 export default function Users() {
@@ -29,6 +29,11 @@ export default function Users() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); 
   const [isSaving, setIsSaving] = useState(false);
+
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetResult, setResetResult] = useState(null);
+  const [isResetting, setIsResetting] = useState(false);
   
   const [batchToggles, setBatchToggles] = useState({ papel: false, status: false, endereco_cidade: false, endereco_estado: false });
 
@@ -71,20 +76,24 @@ export default function Users() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
 
-  // FUNÇÃO DE UTILIDADE MÁGICA PARA O SUPER ADMIN
   const getActiveTenantId = () => {
       const token = localStorage.getItem('medsched_token');
       if (!token) return null;
       const decoded = jwtDecode(token);
-      // Se tiver tenant_id no token, usa ele. Se não (Super Admin), usa o do dropdown.
       return decoded.tenant_id || localStorage.getItem('selected_tenant_id');
+  };
+
+  const isCurrentUserSuperAdmin = () => {
+      const token = localStorage.getItem('medsched_token');
+      if (!token) return false;
+      const decoded = jwtDecode(token);
+      return ['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(decoded.papel || decoded.role);
   };
 
   const savePreferences = async (newColumns) => {
     try {
       const token = localStorage.getItem('medsched_token');
       const decoded = jwtDecode(token);
-      // Evita erro se o Super Admin (que não tem preferencias_ui na tabela users) tentar salvar
       if (['SUPER_ADMIN', 'SYSTEM_ADMIN'].includes(decoded.papel || decoded.role)) return;
       
       const userRes = await api.get(`/users/${decoded.sub}`, { params: { tenant_id: getActiveTenantId() } });
@@ -129,7 +138,7 @@ export default function Users() {
       const activeTenant = getActiveTenantId();
       if (!activeTenant) {
           setIsLoading(false);
-          return; // Super admin não selecionou nenhuma clínica ainda
+          return; 
       }
       
       const [resUsers, resCust] = await Promise.all([
@@ -241,7 +250,6 @@ export default function Users() {
     }
   };
 
-  // CORRIGIDO: Usa a mágica do getActiveTenantId
   const handleOpenCreate = () => { 
     const activeTenant = getActiveTenantId();
     if (!activeTenant) return toast.error("Selecione uma clínica no menu lateral primeiro.");
@@ -257,7 +265,6 @@ export default function Users() {
     setIsModalOpen(true); 
   };
 
-  // CORRIGIDO: Usa a mágica do getActiveTenantId
   const handleOpenEdit = () => {
     const activeTenant = getActiveTenantId();
     if (selectedUsers.length === 1) {
@@ -330,7 +337,7 @@ export default function Users() {
         toast.success("Usuário criado com sucesso!"); 
       } 
       else if (modalMode === 'edit') { 
-        await api.put(`/users/${selectedUsers[0]}`, payload, { params: { tenant_id: formData.tenant_id } }); 
+        await api.put(`/users/${editingAuditData.id}`, payload, { params: { tenant_id: formData.tenant_id } }); 
         toast.success("Usuário atualizado!"); 
         setSelectedUsers([]); 
       } 
@@ -349,8 +356,52 @@ export default function Users() {
       }
       setIsModalOpen(false); fetchUsers(); 
     } catch (err) { 
-      toast.error(err.response?.data?.detail || "Erro ao salvar. Verifique os dados."); 
+      let msg = "Erro ao salvar. Verifique os dados enviados.";
+      if (err.response?.data?.detail) {
+          msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : "Atenção: Existem campos obrigatórios ausentes ou incorretos.";
+      }
+      toast.error(msg); 
     } finally { setIsSaving(false); }
+  };
+
+  // ---------------------------------------------------------
+  // 🔐 MOTOR DE RESET DE SENHA NO FRONTEND BLINDADO
+  // ---------------------------------------------------------
+  const handleOpenResetPassword = () => {
+    setResetPasswordValue('');
+    setResetResult(null);
+    setIsResetModalOpen(true);
+  };
+
+  const handleConfirmResetPassword = async (e) => {
+    e.preventDefault();
+    setIsResetting(true);
+    try {
+        const payload = { nova_senha: null };
+        
+        if (isCurrentUserSuperAdmin()) {
+            if (resetPasswordValue.length < 8) {
+                setIsResetting(false);
+                return toast.error("A senha explícita exige 8 caracteres.");
+            }
+            payload.nova_senha = resetPasswordValue;
+        }
+
+        // 👇 DRCODE: CORREÇÃO VITAL! Substituído "selectedUsers[0]" pelo ID real que está na edição. 
+        // Isso impede que a URL fique "undefined" e gere o erro 422!
+        const res = await api.post(`/users/${editingAuditData.id}/reset-password`, payload, { params: { tenant_id: formData.tenant_id } });
+        
+        setResetResult(res.data);
+        toast.success("Reset concluído com sucesso!");
+    } catch (err) {
+        let msg = "Você não tem permissão para resetar esta senha.";
+        if (err.response?.data?.detail) {
+            msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : "Erro na validação do servidor (422).";
+        }
+        toast.error(msg);
+    } finally {
+        setIsResetting(false);
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -421,6 +472,7 @@ export default function Users() {
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
+        {/* Modal da Agenda no Perfil */}
         <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Agenda: ${selectedHistoryUser?.nome}`}>
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -449,6 +501,53 @@ export default function Users() {
             </div>
         </Modal>
 
+        {/* MODAL MÁGICO DE RESET DE SENHA */}
+        <Modal isOpen={isResetModalOpen} onClose={() => setIsResetModalOpen(false)} title="Reset de Senha de Acesso">
+            <div className="flex flex-col gap-4">
+                {resetResult ? (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center space-y-4">
+                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
+                        <h3 className="font-bold text-green-800 text-lg">Senha Redefinida!</h3>
+                        {resetResult.is_temporaria && (
+                             <p className="text-sm text-green-700">A senha abaixo é temporária e irá expirar em exatas <strong>2 horas</strong>. Caso o usuário não faça o login neste prazo, a senha antiga voltará a valer.</p>
+                        )}
+                        <div className="bg-white border-2 border-green-300 p-4 rounded-lg shadow-inner">
+                            <span className="text-3xl font-mono font-black text-slate-800 tracking-widest">{resetResult.senha_temporaria}</span>
+                        </div>
+                        <button onClick={() => {setIsResetModalOpen(false); setResetResult(null);}} className="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg mt-4 w-full">Concluir</button>
+                    </div>
+                ) : (
+                    <form onSubmit={handleConfirmResetPassword} className="space-y-4">
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                            <p className="text-sm text-yellow-800">
+                                Você está prestes a solicitar um reset de senha para o usuário <strong>{formData.nome}</strong>.
+                                Por regras de segurança, apenas os perfis hierarquicamente superiores podem realizar esta ação.
+                            </p>
+                        </div>
+
+                        {isCurrentUserSuperAdmin() ? (
+                            <div className="mt-4">
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Nova Senha Definitiva (Apenas Super Admin)</label>
+                                <input type="text" required minLength={8} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Digite uma senha forte..." value={resetPasswordValue} onChange={e => setResetPasswordValue(e.target.value)} />
+                                <p className="text-xs text-slate-500 mt-1">Como você é um administrador global, a senha informada não expirará.</p>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-600 font-medium text-center py-4">Confirma a geração de uma nova senha temporária aleatória?</p>
+                        )}
+
+                        <div className="flex gap-3 pt-4 border-t border-slate-200">
+                            <button type="button" onClick={() => setIsResetModalOpen(false)} className="flex-1 px-4 py-2 border border-slate-300 text-slate-600 font-bold rounded-lg">Cancelar</button>
+                            <button type="submit" disabled={isResetting} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex justify-center items-center gap-2">
+                                {isResetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                                Gerar Senha
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </Modal>
+
+        {/* Modal Principal de Criação/Edição */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}>
           <form onSubmit={handleSaveUser} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
@@ -510,7 +609,7 @@ export default function Users() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <div className={`p-3 rounded-lg border ${modalMode === 'batch-edit' && !batchToggles.papel ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
                   {modalMode === 'batch-edit' ? <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 cursor-pointer"><input type="checkbox" checked={batchToggles.papel} onChange={e => setBatchToggles({...batchToggles, papel: e.target.checked})} className="rounded text-blue-600" />Sobrescrever Cargo</label> : <label className="block text-sm font-medium text-gray-700 mb-1">Papel / Cargo</label>}
-                  <select disabled={modalMode === 'batch-edit' && !batchToggles.papel} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.papel} onChange={e => setFormData({...formData, papel: e.target.value})}><option value="TENANT_ADMIN">Admin</option><option value="PROFISSIONAL">Profissional</option><option value="CLIENTE">Cliente</option></select>
+                  <select disabled={modalMode === 'batch-edit' && !batchToggles.papel} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white disabled:bg-gray-50" value={formData.papel} onChange={e => setFormData({...formData, papel: e.target.value})}><option value="TENANT_ADMIN">Admin</option><option value="GESTOR">Gestor da Recepção</option><option value="PROFISSIONAL">Profissional</option><option value="CLIENTE">Cliente</option></select>
                 </div>
                 {modalMode !== 'create' && (
                   <div className={`p-3 rounded-lg border ${modalMode === 'batch-edit' && !batchToggles.status ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-300'}`}>
@@ -520,6 +619,19 @@ export default function Users() {
                 )}
               </div>
             </fieldset>
+
+            {/* ABA DE SEGURANÇA E RESET DE SENHA SÓ APARECE NA EDIÇÃO */}
+            {modalMode === 'edit' && (
+               <fieldset className="border border-red-200 p-4 rounded-xl bg-red-50/30 mt-4 shadow-sm">
+                  <legend className="text-sm font-bold text-red-700 px-2 uppercase tracking-wider flex items-center gap-2"><Shield className="w-4 h-4" /> Segurança da Conta</legend>
+                  <div className="flex items-center justify-between mt-2 p-2 bg-white rounded-lg border border-red-100">
+                     <span className="text-sm text-gray-700 font-medium">Você pode gerar um código de acesso temporário para este usuário.</span>
+                     <button type="button" onClick={handleOpenResetPassword} className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-lg transition-colors text-sm flex items-center gap-2 shadow-sm">
+                        <Shield className="w-4 h-4" /> Resetar Senha
+                     </button>
+                  </div>
+               </fieldset>
+            )}
 
             {modalMode !== 'batch-edit' && (
               <div className="mt-4">
@@ -606,7 +718,6 @@ export default function Users() {
 
               <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Exportar CSV"><Download className="w-5 h-5" /></button>
               
-              {/* BOTÃO CORRIGIDO */}
               <button onClick={handleOpenCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
             </div>
           </div>

@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
-// 👇 DRCODE: Adicionado o ícone 'Clock' para a fila de espera
-import { LayoutDashboard, Users, Calendar, Clock, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign } from 'lucide-react';
 
 export default function Layout({ children }) {
   const [role, setRole] = useState('');
   const [userName, setUserName] = useState('Carregando...');
   const [isCollapsed, setIsCollapsed] = useState(false);
   
-  // Cor padrão do sistema caso o cliente não tenha configurado uma
   const [themeColor, setThemeColor] = useState('#0f172a'); 
   
-  // Estados para o Seletor de Clínicas (Super Admin)
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(localStorage.getItem('selected_tenant_id') || '');
 
@@ -28,8 +25,6 @@ export default function Layout({ children }) {
            setUserName('Administrador');
            setRole(tokenRole);
            setThemeColor('#1e1e1e');
-           
-           // Super Admin: Busca a lista de todas as clínicas para o seletor
            api.get('/tenants').then(res => setTenants(res.data)).catch(() => {});
            return;
         }
@@ -46,14 +41,12 @@ export default function Layout({ children }) {
             });
         }
 
-        // MÁGICA DRCODE: Busca as configurações visuais e injeta no CSS global
         const targetTenant = decoded.tenant_id || selectedTenant;
         if (targetTenant) {
           api.get(`/tenants/${targetTenant}`)
             .then(res => {
               const configVisuais = res.data.configuracoes_visuais || {};
               const corPrimaria = configVisuais.cor_primaria;
-              
               if (corPrimaria) {
                 setThemeColor(corPrimaria); 
                 document.documentElement.style.setProperty('--cor-primaria', corPrimaria);
@@ -81,8 +74,6 @@ export default function Layout({ children }) {
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
     { name: 'Agenda', icon: Calendar, path: '/agenda', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL', 'CLIENTE'] },
-    // 👇 DRCODE NOVO: O botão da Fila de Espera logo abaixo da Agenda
-    { name: 'Fila de Espera', icon: Clock, path: '/espera', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL', 'CLIENTE'] },
     { name: 'Clientes', icon: UserRound, path: '/clientes', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL'] },
     { name: 'Financeiro', icon: DollarSign, path: '/finance', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
     { name: 'Usuários', icon: Users, path: '/usuarios', roles: ['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR'] },
@@ -114,7 +105,6 @@ export default function Layout({ children }) {
           {!isCollapsed && <span className="text-xl font-bold text-white">ServiceSchedule</span>}
         </div>
 
-        {/* SELETOR DE TENANT */}
         {!isCollapsed && (role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN') && (
           <div className="px-4 py-4 border-b border-white/10 bg-black/10">
             <label className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1 mb-2">

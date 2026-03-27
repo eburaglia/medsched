@@ -1,5 +1,4 @@
 from typing import Any
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -22,25 +21,16 @@ def login_access_token(
     # 1. Tenta buscar o usuário nas Clínicas (Tenants)
     user = crud_user.get_user_by_email(db, email=form_data.username)
     
-    if user:
-        # Verifica a senha oficial
-        is_valid = verify_password(form_data.password, user.senha_hash)
-        
-        # Se a oficial falhou, verifica se existe uma senha temporária VÁLIDA (Dentro de 2 horas)
-        if not is_valid and user.recuperacao_token and user.recuperacao_expira:
-            if datetime.utcnow() <= user.recuperacao_expira:
-                is_valid = verify_password(form_data.password, user.recuperacao_token)
-                
-        if is_valid:
-            if user.status.value == "INATIVO":
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuário inativo.")
-                
-            access_token = create_access_token(
-                user_id=user.id, 
-                tenant_id=user.tenant_id,
-                role=user.papel.value if hasattr(user.papel, 'value') else user.papel
-            )
-            return {"access_token": access_token, "token_type": "bearer"}
+    if user and verify_password(form_data.password, user.senha_hash):
+        if user.status.value == "INATIVO":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuário inativo.")
+            
+        access_token = create_access_token(
+            user_id=user.id, 
+            tenant_id=user.tenant_id,
+            role=user.papel.value if hasattr(user.papel, 'value') else user.papel
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
     
     # 2. Se não achar na Clínica, tenta buscar no nível Global (Super Admin)
     super_user = crud_super_admin.get_super_admin_by_email(db, email=form_data.username)
@@ -57,9 +47,9 @@ def login_access_token(
         )
         return {"access_token": access_token, "token_type": "bearer"}
 
-    # 3. Se não achar em nenhum dos dois, ou a senha/temporária falhar
+    # 3. Se não achar em nenhum dos dois, falha.
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="E-mail ou senha incorretos (ou senha temporária expirada)",
+        detail="E-mail ou senha incorretos",
         headers={"WWW-Authenticate": "Bearer"},
     )
