@@ -8,10 +8,8 @@ export default function Layout({ children }) {
   const [userName, setUserName] = useState('Carregando...');
   const [isCollapsed, setIsCollapsed] = useState(false);
   
-  // Cor padrão do sistema caso o cliente não tenha configurado uma
   const [themeColor, setThemeColor] = useState('#0f172a'); 
   
-  // Estados para o Seletor de Clínicas (Super Admin)
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(localStorage.getItem('selected_tenant_id') || '');
 
@@ -27,8 +25,6 @@ export default function Layout({ children }) {
            setUserName('Administrador');
            setRole(tokenRole);
            setThemeColor('#1e1e1e');
-           
-           // Super Admin: Busca a lista de todas as clínicas para o seletor
            api.get('/tenants').then(res => setTenants(res.data)).catch(() => {});
            return;
         }
@@ -45,21 +41,14 @@ export default function Layout({ children }) {
             });
         }
 
-        // 👇 MÁGICA DRCODE: Busca as configurações visuais e injeta no CSS global
         const targetTenant = decoded.tenant_id || selectedTenant;
         if (targetTenant) {
           api.get(`/tenants/${targetTenant}`)
             .then(res => {
-              // Pegamos o JSON inteiro que configuramos no backend
               const configVisuais = res.data.configuracoes_visuais || {};
-              
-              // Extraímos a cor (se existir)
               const corPrimaria = configVisuais.cor_primaria;
-              
               if (corPrimaria) {
-                setThemeColor(corPrimaria); // Pinta o menu lateral
-                
-                // Cria uma variável global no CSS para que qualquer tela possa usar var(--cor-primaria)
+                setThemeColor(corPrimaria); 
                 document.documentElement.style.setProperty('--cor-primaria', corPrimaria);
               }
             })
@@ -79,7 +68,7 @@ export default function Layout({ children }) {
       localStorage.setItem('selected_tenant_id', id);
     }
     setSelectedTenant(id);
-    window.location.reload(); // Recarrega para aplicar a "máscara" em todos os componentes
+    window.location.reload(); 
   };
 
   const menuItems = [
@@ -106,7 +95,7 @@ export default function Layout({ children }) {
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)} 
           className="absolute -right-3 top-8 text-white rounded-full p-1 shadow-lg z-30"
-          style={{ backgroundColor: themeColor, filter: 'brightness(1.2)' }} // O botão herda a cor, mas fica um pouco mais claro
+          style={{ backgroundColor: themeColor, filter: 'brightness(1.2)' }} 
         >
           {isCollapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
@@ -116,7 +105,6 @@ export default function Layout({ children }) {
           {!isCollapsed && <span className="text-xl font-bold text-white">ServiceSchedule</span>}
         </div>
 
-        {/* SELETOR DE TENANT (Exclusivo Super Admin) */}
         {!isCollapsed && (role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN') && (
           <div className="px-4 py-4 border-b border-white/10 bg-black/10">
             <label className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1 mb-2">
