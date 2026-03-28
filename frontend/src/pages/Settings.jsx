@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import Layout from '../components/Layout';
-import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save } from 'lucide-react';
+import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ export default function Settings() {
   const [tenantId, setTenantId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
-  // DRCODE: Precisamos guardar os dados inteiros do Tenant para o PUT
+  // Guardando os dados inteiros do Tenant para o PUT
   const [fullTenantData, setFullTenantData] = useState(null);
 
   useEffect(() => {
@@ -26,7 +26,6 @@ export default function Settings() {
         if (targetId) {
           setTenantId(targetId);
           api.get(`/tenants/${targetId}`).then(res => {
-            // DRCODE: Guarda os dados completos para usar no PUT mais tarde
             setFullTenantData(res.data);
             
             const configVisuais = res.data.configuracoes_visuais || {};
@@ -41,22 +40,17 @@ export default function Settings() {
     }
   }, []);
 
-  // DRCODE: Ajustado para usar PUT e enviar os dados completos, conforme exige o backend
   const salvarCores = async () => {
     if (!tenantId || !fullTenantData) return;
     setIsSaving(true);
     
     try {
-      // Cria um objeto mesclando os dados antigos com a nova cor
       const dadosAtualizados = {
         ...fullTenantData,
         configuracoes_visuais: { cor_primaria: corPrimaria }
       };
 
-      // Usa PUT em vez de PATCH
       await api.put(`/tenants/${tenantId}`, dadosAtualizados);
-      
-      // Recarrega a página para que o Layout pegue a nova cor
       window.location.reload(); 
     } catch (error) {
       console.error("Erro ao salvar cores", error);
@@ -74,18 +68,27 @@ export default function Settings() {
       path: "/configuracoes/faturamento",
       active: true
     },
+    // 👇 DRCODE: Novo Botão de Templates de Notificação
+    {
+      title: "Mensageria e Templates",
+      description: "Configure os textos de e-mail, WhatsApp e avisos automáticos do sistema.",
+      icon: <Bell className="w-6 h-6" />,
+      path: "/configuracoes/notificacoes",
+      active: true
+    },
+    // 👇 DRCODE: Novo Botão de Integrações
+    {
+      title: "Integrações Externas",
+      description: "Conecte seu servidor de E-mail (SMTP), API do WhatsApp e Bot do Telegram.",
+      icon: <Plug className="w-6 h-6" />,
+      path: "/configuracoes/integracoes",
+      active: true
+    },
     {
       title: "Segurança e Acesso",
       description: "Controle de permissões por perfil e logs de auditoria.",
       icon: <Shield className="w-6 h-6" />,
       path: "/configuracoes/seguranca",
-      active: false
-    },
-    {
-      title: "Notificações",
-      description: "Configurações de avisos por WhatsApp, E-mail e SMS.",
-      icon: <Bell className="w-6 h-6" />,
-      path: "/configuracoes/notificacoes",
       active: false
     }
   ];
@@ -129,7 +132,6 @@ export default function Settings() {
           ))}
         </div>
 
-        {/* DRCODE: SEÇÃO DE IDENTIDADE VISUAL */}
         <div className="mt-4 bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
             <Palette className="w-6 h-6 text-blue-600" />

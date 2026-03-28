@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
@@ -7,7 +7,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, UserRound, Settings, FileText, LogOut, 
   ChevronLeft, Menu, BriefcaseMedical, Box, Building2, Globe, DollarSign, 
-  ShieldAlert, Loader2, KeyRound, Save 
+  ShieldAlert, Loader2, KeyRound, Save, BellRing, Check, X
 } from 'lucide-react';
 
 export default function Layout({ children }) {
@@ -19,20 +19,22 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Controle de Cores e FOUC (Piscar) - Agora lê do LocalStorage no primeiro milissegundo
   const [themeColor, setThemeColor] = useState(localStorage.getItem('saved_theme_color') || '#0f172a'); 
   const [isThemeLoaded, setIsThemeLoaded] = useState(false);
   
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(localStorage.getItem('selected_tenant_id') || '');
 
-  // ESTADOS DA TROCA DE SENHA
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ senhaAtual: '', novaSenha: '', confirmarNovaSenha: '' });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  // 👇 DRCODE: Estados do Sininho de Notificações
+  const [notifications, setNotifications] = useState([]);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationRef = useRef(null);
+
   useEffect(() => {
-    // Aplica a cor imediatamente se já estiver no LocalStorage para evitar a piscada
     const savedColor = localStorage.getItem('saved_theme_color');
     if (savedColor) {
         document.documentElement.style.setProperty('--cor-primaria', savedColor);
@@ -57,6 +59,7 @@ export default function Layout({ children }) {
                 document.documentElement.style.setProperty('--cor-primaria', adminColor);
                 setIsThemeLoaded(true);
                 api.get('/tenants').then(res => setTenants(res.data)).catch(() => {});
+                fetchNotifications(); // Busca as notificações pro Admin
                 return;
             }
 
@@ -84,6 +87,7 @@ export default function Layout({ children }) {
                     }
                 } catch(e) {}
             }
+            fetchNotifications(); // Busca as notificações para os usuários comuns
         } catch (e) {
             console.error("Erro no token", e);
         } finally {
@@ -93,6 +97,31 @@ export default function Layout({ children }) {
     fetchUserDataAndTheme();
   }, [selectedTenant]);
 
+  // 👇 DRCODE: Lógica de Busca e Fechamento do Dropdown do Sininho
+  const fetchNotifications = async () => {
+    try {
+        const res = await api.get('/notifications/in-app');
+        setNotifications(res.data.filter(n => !n.lida)); // Guarda só as não lidas
+    } catch (e) { console.error("Erro ao buscar notificações", e); }
+  };
+
+  const markAsRead = async (logId) => {
+    try {
+        await api.put(`/notifications/in-app/${logId}/read`);
+        setNotifications(prev => prev.filter(n => n.id !== logId));
+    } catch (e) { toast.error("Erro ao marcar como lida."); }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+        if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+            setIsNotificationOpen(false);
+        }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleTenantChange = (e) => {
     const id = e.target.value;
     if (id === "") {
@@ -100,7 +129,6 @@ export default function Layout({ children }) {
       localStorage.removeItem('saved_theme_color');
     } else {
       localStorage.setItem('selected_tenant_id', id);
-      // Pega a cor do tenant selecionado na lista (se disponível) para trocar instantaneamente
       const selectedT = tenants.find(t => t.id === id);
       if (selectedT && selectedT.configuracoes_visuais?.cor_primaria) {
           localStorage.setItem('saved_theme_color', selectedT.configuracoes_visuais.cor_primaria);
@@ -153,7 +181,6 @@ export default function Layout({ children }) {
 
   const handleLogout = () => {
       localStorage.clear();
-      // Como o logout reseta tudo, aí sim usamos o recarregamento total
       window.location.href = '/login';
   };
 
@@ -205,12 +232,12 @@ export default function Layout({ children }) {
       </Modal>
 
       <aside 
-        className={`${isCollapsed ? 'w-20' : 'w-64'} text-slate-200 flex flex-col shadow-xl z-20 transition-all duration-300 relative`}
+        className={`${isCollapsed ? 'w-20' : 'w-64'} text-slate-200 flex flex-col shadow-xl z-30 transition-all duration-300 relative`}
         style={{ backgroundColor: themeColor }}
       >
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)} 
-          className="absolute -right-3 top-8 text-white rounded-full p-1 shadow-lg z-30"
+          className="absolute -right-3 top-8 text-white rounded-full p-1 shadow-lg z-40"
           style={{ backgroundColor: themeColor, filter: 'brightness(1.2)' }} 
         >
           {isCollapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -240,7 +267,6 @@ export default function Layout({ children }) {
         )}
         
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {/* 👇 DRCODE: Troca mágica de <a href> para <Link to>. Sem mais recarregamentos! */}
           {allowedMenus.map((item) => (
             <Link 
               key={item.name} 
@@ -271,7 +297,67 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto bg-gray-50">
+      <main className="flex-1 overflow-auto bg-gray-50 flex flex-col relative z-10">
+        
+        {/* 👇 DRCODE: HEADER MINIMALISTA PARA O SININHO */}
+        <header className="bg-white h-14 border-b border-slate-200 flex items-center justify-end px-6 sticky top-0 z-20 shadow-sm shrink-0">
+            <div className="relative" ref={notificationRef}>
+                <button 
+                  onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                  className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors relative"
+                >
+                    <BellRing className="w-5 h-5" />
+                    {notifications.length > 0 && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse"></span>
+                    )}
+                </button>
+
+                {/* DROPDOWN DE MENSAGENS */}
+                {isNotificationOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                        <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                            <h3 className="text-sm font-bold text-slate-800">Notificações</h3>
+                            {notifications.length > 0 && (
+                                <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                    {notifications.length} nova{notifications.length > 1 ? 's' : ''}
+                                </span>
+                            )}
+                        </div>
+                        
+                        <div className="max-h-80 overflow-y-auto">
+                            {notifications.length === 0 ? (
+                                <div className="p-6 text-center text-slate-400">
+                                    <Check className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm font-medium">Nenhuma notificação nova.</p>
+                                </div>
+                            ) : (
+                                <ul className="divide-y divide-slate-100">
+                                    {notifications.map(notif => (
+                                        <li key={notif.id} className="p-4 hover:bg-slate-50 transition-colors group relative">
+                                            <div className="pr-6">
+                                                <p className="text-xs font-bold text-slate-800 mb-1">{notif.assunto || "Mensagem do Sistema"}</p>
+                                                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{notif.conteudo}</p>
+                                                <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                                                    {new Date(notif.criado_em).toLocaleDateString('pt-BR')} às {new Date(notif.criado_em).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                                                </p>
+                                            </div>
+                                            <button 
+                                                onClick={() => markAsRead(notif.id)}
+                                                className="absolute top-4 right-3 p-1 text-slate-300 hover:text-green-600 hover:bg-green-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                                                title="Marcar como lida"
+                                            >
+                                                <Check className="w-4 h-4" />
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </header>
+
         {children}
       </main>
     </div>

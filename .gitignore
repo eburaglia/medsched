@@ -16,3 +16,4 @@ __pycache__/
 # Logs e Banco de Dados Local
 *.log
 *.sqlite
+evolution-api/

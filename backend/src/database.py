@@ -30,3 +30,5 @@ def get_db():
         yield db
     finally:
         db.close()
+from src.models.notification import NotificationTemplate, NotificationLog
+from src.models.integration import IntegrationConfig

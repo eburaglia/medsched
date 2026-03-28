@@ -1,5 +1,5 @@
 # ==========================================
-# ORQUESTRADOR DE INFRAESTRUTURA - FASE 4
+# ORQUESTRADOR DE INFRAESTRUTURA - FASE 3
 # ==========================================
 
 services:
@@ -23,18 +23,6 @@ services:
       - medsched_net
 
   # ----------------------------------------
-  # BANCO EM MEMÓRIA (REDIS) - PARA WHATSAPP
-  # ----------------------------------------
-  redis:
-    image: redis:7-alpine
-    container_name: medsched-redis
-    restart: always
-    ports:
-      - "46379:6379"
-    networks:
-      - medsched_net
-
-  # ----------------------------------------
   # CAMADA LÓGICA: API Python (FastAPI)
   # ----------------------------------------
   api:
@@ -42,6 +30,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: medsched-api
+    # ----------------------------------------
+    # 🔒 CORREÇÃO DE PERMISSÕES DO ALEMBIC
+    # Garante que os arquivos gerados pertençam ao medicaluser (124:127)
+    # ----------------------------------------
     user: "124:127"
     restart: unless-stopped
     ports:
@@ -56,28 +48,6 @@ services:
       - medsched_net
 
   # ----------------------------------------
-  # WORKER: Disparador de WhatsApp em Background
-  # ----------------------------------------
-  whatsapp-worker:
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: medsched-whatsapp-worker
-    user: "124:127"
-    restart: unless-stopped
-    # Aqui é a mágica: ele roda a imagem do backend, mas executa o script em loop!
-    command: python worker_whatsapp.py
-    volumes:
-      - ./backend:/app
-    env_file:
-      - .env
-    depends_on:
-      - db
-      - whatsapp-api
-    networks:
-      - medsched_net
-
-  # ----------------------------------------
   # CAMADA VISUAL: Frontend React (Vite)
   # ----------------------------------------
   web:
@@ -86,53 +56,45 @@ services:
       dockerfile: Dockerfile
     container_name: medsched-web
     restart: unless-stopped
+    # Mapeamento: Porta 40001 no seu servidor -> Porta 3000 no container
     ports:
       - "40001:3000"
     volumes:
       - ./frontend:/app
+      # Este volume anônimo impede que a pasta node_modules do container seja sobrescrita pelo host
       - /app/node_modules
     depends_on:
       - api
     networks:
       - medsched_net
+# --- BANCO DE DADOS EM MEMÓRIA PARA O WHATSAPP ---
+  redis:
+    image: redis:7-alpine
+    container_name: medsched-redis
+    restart: always
+    # Mapeando para porta alta (46379)
+    ports:
+      - "46379:6379"
 
-  # ----------------------------------------
-  # API DO WHATSAPP (EVOLUTION v2)
-  # ----------------------------------------
+  # --- A API DO WHATSAPP (EVOLUTION) ---
   whatsapp-api:
     image: evolution-api:2.1.1
     container_name: medsched-whatsapp
     restart: always
     environment:
       - SERVER_TYPE=http
-      - SERVER_PORT=8080
+      - SERVER_PORT=8080 # Interna do container permanece 8080
       - LOG_LEVEL=ERROR,WARN,DEBUG
       - DELAY_MESSAGES=true
-      
-      # --- CONFIGURAÇÃO DE BANCO (CORRIGE O ERRO INVALID PROVIDER) ---
-      - DATABASE_ENABLED=true
-      - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/evolution_db?sslmode=disable
-      
-      # --- REDIS PARA PERFORMANCE E CACHE (CORRIGE O ERRO DE DISCONNECT) ---
+      - DATABASE_ENABLED=false
       - REDIS_ENABLED=true
-      - REDIS_URI=redis://redis:6379/1
-      - REDIS_PREFIX_KEY=evolution
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://redis:6379/2
-      - CACHE_LOCAL_ENABLED=false
-      
-      # --- SEGURANÇA ---
+      - REDIS_URI=redis://redis:6379 # Comunicação interna entre containers (usa a porta original)
       - AUTHENTICATION_TYPE=apikey
       - AUTHENTICATION_API_KEY=medsched_global_secret_key
     ports:
-      - "48080:8080"
+      - "48080:8080" # Mapeando externa para porta alta (48080)
     depends_on:
       - redis
-      - db
-    networks:
-      - medsched_net
-
 # ----------------------------------------
 # VOLUMES PERSISTENTES
 # ----------------------------------------

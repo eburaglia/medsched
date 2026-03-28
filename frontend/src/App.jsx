@@ -11,9 +11,16 @@ import Agenda from './pages/Agenda';
 import Finance from './pages/Finance';
 import Settings from './pages/Settings'; 
 import BillingSettings from './pages/BillingSettings';
+import IntegrationSettings from './pages/IntegrationSettings';
 
-// 👇 DRCODE: Importando a novíssima página de Registros de Serviço / Atendimentos
+// Importando a página de Registros de Serviço / Atendimentos
 import ServiceRecords from './pages/ServiceRecords';
+
+// Importando a novíssima página de Templates de Notificação
+import NotificationTemplates from './pages/NotificationTemplates';
+
+// 👇 NOVO: Importando a página de Conexão do WhatsApp
+import WhatsAppConnect from './pages/WhatsAppConnect';
 
 // Importando o nosso guarda-costas de rotas
 import ProtectedRoute from './components/ProtectedRoute';
@@ -33,7 +40,7 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* 👇 DRCODE: A Porta de Entrada para a Execução do Serviço */}
+        {/* A Porta de Entrada para a Execução do Serviço */}
         <Route path="/atendimentos" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR', 'PROFISSIONAL']}>
             <ServiceRecords />
@@ -90,10 +97,29 @@ function App() {
           </ProtectedRoute>
         } />
 
+        <Route path="/configuracoes/notificacoes" element={
+          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR']}>
+            <NotificationTemplates />
+          </ProtectedRoute>
+        } />
+
         {/* Rotas Protegidas - Nível 4: Exclusivo Dono do Sistema */}
         <Route path="/tenants" element={
           <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'SYSTEM_ADMIN']}>
             <Tenants />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/configuracoes/integracoes" element={
+          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <IntegrationSettings />
+          </ProtectedRoute>
+        } />
+
+        {/* 👇 NOVO: Rota para o painel de Conexão do WhatsApp */}
+        <Route path="/configuracoes/whatsapp" element={
+          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <WhatsAppConnect />
           </ProtectedRoute>
         } />
 
