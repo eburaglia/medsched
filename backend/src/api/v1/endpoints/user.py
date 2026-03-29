@@ -13,7 +13,6 @@ from src.schemas.user import UserCreate, UserUpdate, UserResponse
 from src.crud import user as crud_user
 from src.api.deps import get_current_user, RoleChecker
 from src.models.user import User
-# 👇 DRCODE: Adicionado o verify_password para a rota de troca de senha
 from src.core.security import get_password_hash, verify_password
 
 # ---------------------------------------------------------
@@ -24,8 +23,11 @@ router = APIRouter(
     tags=["Usuários"]
 )
 
-# Permitindo os administradores da plataforma
+# Permitindo apenas os administradores da plataforma (Para Criar/Editar/Deletar)
 require_admin_or_tenant = RoleChecker(["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN", "GESTOR"])
+
+# Nova permissão para Leitura (Staff), permitindo que profissionais vejam a agenda dos colegas
+require_staff = RoleChecker(["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN", "GESTOR", "PROFISSIONAL"])
 
 class ResetPasswordRequest(BaseModel):
     nova_senha: Optional[str] = None
@@ -79,7 +81,7 @@ def read_users(
     skip: int = 0, 
     limit: int = 100, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_tenant)
+    current_user: User = Depends(require_staff) # 👇 Usando a nova regra
 ):
     verify_tenant_access(current_user, tenant_id)
     return crud_user.get_users_by_tenant(db=db, tenant_id=tenant_id, skip=skip, limit=limit)
@@ -92,7 +94,7 @@ def read_user(
     user_id: UUID, 
     tenant_id: UUID, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_tenant)
+    current_user: User = Depends(require_staff) # 👇 Usando a nova regra
 ):
     verify_tenant_access(current_user, tenant_id)
 
