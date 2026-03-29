@@ -21,7 +21,7 @@ def get_dashboard_stats(
     # Identifica se é usuário comum ou Super Admin
     papel = current_user.papel.value if hasattr(current_user.papel, 'value') else getattr(current_user, 'papel', '')
     
-    # 🛡 TRAVA PARA O SUPER ADMIN (Dono do SaaS)
+    # 🛡️ TRAVA PARA O SUPER ADMIN (Dono do SaaS)
     if papel in ["SUPER_ADMIN", "SYSTEM_ADMIN"]:
         # Ele não tem tenant_id. O Dashboard dele será construído futuramente com dados globais.
         return {
@@ -57,13 +57,13 @@ def get_dashboard_stats(
         User.status == 'ATIVO'
     ).scalar() or 0
 
-    # 4. Próximos Atendimentos (AQUI ESTAVA O ERRO - CORRIGIDO PARA professional_id)
+    # 4. Próximos Atendimentos
     proximos_agendamentos = db.query(
         Appointment.id,
         Appointment.data_hora_inicio,
         User.nome.label("nome_profissional"),
         Customer.nome.label("nome_cliente")
-    ).outerjoin(User, Appointment.professional_id == User.id)\
+    ).outerjoin(User, Appointment.profissional_id == User.id)\
      .outerjoin(Customer, Appointment.customer_id == Customer.id)\
      .filter(
         Appointment.tenant_id == tenant_id,
@@ -115,5 +115,3 @@ def get_dashboard_stats(
         "proximos_atendimentos": atendimentos_lista,
         "grafico": {"dia": grafico_data, "semana": grafico_data, "mes": grafico_data}
     }
-
-

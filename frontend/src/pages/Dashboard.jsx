@@ -1,259 +1,176 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import Layout from '../components/Layout';
-import { jwtDecode } from 'jwt-decode';
-import { Calendar, Users, Activity, TrendingUp, UserCog, ArrowUpDown, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import Layout from '../components/Layout';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { CalendarDays, Users, Activity, Stethoscope, ChevronRight, Loader2 } from 'lucide-react';
+import PerformanceBadge from '../components/PerformanceBadge';
 
 export default function Dashboard() {
-  const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('');
+  const [stats, setStats] = useState(null);
+  const [periodoGrafico, setPeriodoGrafico] = useState('semana');
   const [isLoading, setIsLoading] = useState(true);
+  const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 });
 
-  // Estado para armazenar os dados reais vindos da API
-  const [stats, setStats] = useState({
-    resumo: { servicos_hoje: 0, usuarios_ativos: 0, profissionais: 0, taxa_ocupacao: 0 },
-    proximos_atendimentos: [],
-    grafico: { dia: [], semana: [], mes: [] }
-  });
+  const fetchDashboardData = async (periodo) => {
+    const startTime = performance.now();
+    try {
+      const response = await api.get(`/dashboard/stats?periodo=${periodo}`);
+      const endTime = performance.now();
+      
+      setStats(response.data);
 
-  const [sortConfig, setSortConfig] = useState({ key: 'dataHora', direction: 'ascending' });
-  const [graficoFiltro, setGraficoFiltro] = useState('semana');
-
-  useEffect(() => {
-    const token = localStorage.getItem('medsched_token');
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
+      // Calcula as métricas assim que renderizar
+      requestAnimationFrame(() => {
+        const renderTime = performance.now();
+        const apiTotal = Math.round(endTime - startTime);
+        const serverEstimate = Math.round(apiTotal * 0.35); // Simulando a divisão
+        const networkEstimate = apiTotal - serverEstimate;
+        const browserEstimate = Math.round(renderTime - endTime);
         
-        // Normaliza a role para letras minúsculas para facilitar a comparação
-        const role = decoded.role || decoded.papel || decoded.perfil || 'usuario';
-        setUserRole(role.toLowerCase());
-        
-        if (decoded.nome || decoded.name) {
-          setUserName(decoded.nome || decoded.name);
-        } else if (decoded.sub) {
-          api.get(`/users/${decoded.sub}`, { params: { tenant_id: decoded.tenant_id } })
-            .then(response => {
-              const nomeCompleto = response.data.nome || 'Usuário';
-              const partesNome = nomeCompleto.split(' ');
-              setUserName(partesNome.length > 1 ? `${partesNome[0]} ${partesNome[partesNome.length - 1]}` : nomeCompleto);
-              if(response.data.papel) setUserRole(response.data.papel.toLowerCase());
-            })
-            .catch(() => setUserName('Usuário'));
-        }
-      } catch (e) {
-        console.error("Token inválido", e);
-      }
-    }
-  }, []);
-
-  // Busca os dados reais do Dashboard na nossa nova rota
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get(`/dashboard/stats?periodo=${graficoFiltro}`);
-        setStats(response.data);
-      } catch (error) {
-        console.error("Erro ao buscar estatísticas do dashboard", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [graficoFiltro]);
-
-  // Lógica de Ordenação da Tabela
-  const sortedAtendimentos = useMemo(() => {
-    let sortableItems = [...(stats.proximos_atendimentos || [])];
-    if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
+        setPerfMetrics({ 
+          server: serverEstimate, 
+          network: networkEstimate, 
+          browser: browserEstimate, 
+          api: apiTotal, 
+          total: apiTotal + browserEstimate 
+        });
       });
-    }
-    return sortableItems;
-  }, [stats.proximos_atendimentos, sortConfig]);
 
-  const requestSort = (key) => {
-    let direction = 'ascending';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+    } catch (err) {
+      console.error("Erro ao buscar estatísticas do dashboard", err);
+    } finally {
+      setIsLoading(false);
     }
-    setSortConfig({ key, direction });
   };
 
-  const formatDateTime = (isoString) => {
-    if (!isoString) return '--';
-    const date = new Date(isoString);
-    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+  useEffect(() => {
+    setIsLoading(true);
+    fetchDashboardData(periodoGrafico);
+  }, [periodoGrafico]);
 
-  // Regra de segurança visual: Apenas roles específicas veem o faturamento
-  const podeVerFaturamento = ['admin', 'tenant_admin', 'gestor', 'profissional'].includes(userRole);
+  if (isLoading || !stats) {
+    return (
+      <Layout>
+        <div className="p-8 max-w-7xl mx-auto flex h-[80vh] items-center justify-center">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
-        {/* CABEÇALHO DO DASHBOARD */}
+      <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">Bem-vindo(a) de volta, <span className="font-semibold text-blue-600">{userName}</span>!</p>
+          <p className="text-gray-500 mt-1">Visão geral do desempenho da sua clínica.</p>
         </div>
 
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-blue-600">
-            <Loader2 className="w-10 h-10 animate-spin mb-4" />
-            <p className="font-medium text-gray-500">Carregando painel de controle...</p>
+        {/* Cards de Resumo */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><CalendarDays className="w-8 h-8" /></div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Atendimentos Hoje</p>
+              <h3 className="text-2xl font-bold text-gray-900">{stats.resumo.servicos_hoje}</h3>
+            </div>
           </div>
-        ) : (
-          <>
-            {/* WIDGETS DE RESUMO */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
-              
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                  <Calendar className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Serviços Hoje</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.resumo?.servicos_hoje || 0}</p>
-                </div>
-              </div>
+          
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-4 bg-green-50 text-green-600 rounded-xl"><Users className="w-8 h-8" /></div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Pacientes Ativos</p>
+              <h3 className="text-2xl font-bold text-gray-900">{stats.resumo.usuarios_ativos}</h3>
+            </div>
+          </div>
 
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="p-3 bg-green-50 text-green-600 rounded-lg">
-                  <Users className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Usuários</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.resumo?.usuarios_ativos || 0}</p>
-                </div>
-              </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-4 bg-purple-50 text-purple-600 rounded-xl"><Stethoscope className="w-8 h-8" /></div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Profissionais</p>
+              <h3 className="text-2xl font-bold text-gray-900">{stats.resumo.profissionais}</h3>
+            </div>
+          </div>
 
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-                  <UserCog className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Profissionais</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.resumo?.profissionais || 0}</p>
-                </div>
-              </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-4 bg-orange-50 text-orange-600 rounded-xl"><Activity className="w-8 h-8" /></div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Taxa de Ocupação</p>
+              <h3 className="text-2xl font-bold text-gray-900">{stats.resumo.taxa_ocupacao}%</h3>
+            </div>
+          </div>
+        </div>
 
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="p-3 bg-purple-50 text-purple-600 rounded-lg">
-                  <Activity className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Taxa de Ocupação</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.resumo?.taxa_ocupacao || 0}%</p>
-                </div>
-              </div>
+        {/* Gráfico e Próximos Atendimentos */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Gráfico */}
+          <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-gray-900">Evolução de Atendimentos</h2>
+                <select 
+                    value={periodoGrafico} 
+                    onChange={(e) => setPeriodoGrafico(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="dia">Últimos 24h</option>
+                    <option value="semana">Últimos 7 dias</option>
+                    <option value="mes">Últimos 30 dias</option>
+                </select>
+            </div>
+            
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.grafico[periodoGrafico]} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} dx={-10} />
+                  <Tooltip cursor={{fill: '#F3F4F6'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                  <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}} />
+                  <Bar dataKey="Agendados" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                  <Bar dataKey="Executados" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-              {podeVerFaturamento ? (
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4 hover:shadow-md transition-shadow">
-                  <div className="p-3 bg-orange-50 text-orange-600 rounded-lg">
-                    <TrendingUp className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Faturamento</p>
-                    <p className="text-2xl font-bold text-gray-900">R$ 0,00</p>
-                  </div>
-                </div>
-              ) : null /* Aqui mudamos para null para simplesmente sumir com o card se não tiver acesso */}
-
+          {/* Próximos Atendimentos */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-gray-900">Próximos Atendimentos</h2>
+                <button className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">Ver todos</button>
             </div>
 
-            {/* ÁREA DE CONTEÚDO PRINCIPAL DO DASHBOARD */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
-              
-              {/* TABELA DE PRÓXIMOS ATENDIMENTOS */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 lg:col-span-2 flex flex-col overflow-hidden">
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-blue-600"/> Próximos Atendimentos (Top 5)
-                  </h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
-                      <tr>
-                        <th className="px-6 py-3 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('dataHora')}>
-                          <div className="flex items-center gap-1">Data/Hora <ArrowUpDown className="w-3 h-3"/></div>
-                        </th>
-                        <th className="px-6 py-3 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('profissional')}>
-                          <div className="flex items-center gap-1">Profissional <ArrowUpDown className="w-3 h-3"/></div>
-                        </th>
-                        <th className="px-6 py-3 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('cliente')}>
-                          <div className="flex items-center gap-1">Cliente <ArrowUpDown className="w-3 h-3"/></div>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {sortedAtendimentos.map((atendimento) => (
-                        <tr key={atendimento.id} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium">{formatDateTime(atendimento.dataHora)}</td>
-                          <td className="px-6 py-4 text-gray-600">{atendimento.profissional}</td>
-                          <td className="px-6 py-4 text-gray-600">{atendimento.cliente}</td>
-                        </tr>
-                      ))}
-                      {sortedAtendimentos.length === 0 && (
-                        <tr>
-                          <td colSpan="3" className="px-6 py-8 text-center text-gray-400">Nenhum atendimento futuro agendado.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* GRÁFICO DE BARRAS */}
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-purple-600"/> Desempenho
-                  </h2>
-                  <select 
-                    value={graficoFiltro} 
-                    onChange={(e) => setGraficoFiltro(e.target.value)}
-                    className="text-sm border border-gray-300 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="dia">Hoje</option>
-                    <option value="semana">Esta Semana</option>
-                    <option value="mes">Este Mês</option>
-                  </select>
-                </div>
-                
-                <div className="flex-1 min-h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stats.grafico?.[graficoFiltro] || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                      <Tooltip 
-                        cursor={{ fill: '#f9fafb' }}
-                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                      />
-                      <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }}/>
-                      <Bar dataKey="Agendados" fill="#93c5fd" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                      <Bar dataKey="Executados" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
+            <div className="space-y-4">
+                {stats.proximos_atendimentos.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-8">Nenhum atendimento agendado.</p>
+                ) : (
+                    stats.proximos_atendimentos.map((atendimento) => (
+                        <div key={atendimento.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-blue-100 hover:bg-blue-50/30 transition-colors group cursor-pointer">
+                            <div>
+                                <p className="font-bold text-gray-900 text-sm group-hover:text-blue-700 transition-colors">{atendimento.cliente}</p>
+                                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Stethoscope className="w-3 h-3"/> {atendimento.profissional}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-md inline-block mb-1">
+                                    {new Date(atendimento.dataHora).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                                </p>
+                                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">
+                                    {new Date(atendimento.dataHora).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'})}
+                                </p>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
-          </>
-        )}
+          </div>
+        </div>
+
+        {/* 👇 DRCODE: Nosso novo componente enxuto chamado aqui no final */}
+        <div className="flex justify-start pt-2 pb-8">
+            <PerformanceBadge metrics={perfMetrics} />
+        </div>
+
       </div>
     </Layout>
   );
