@@ -3,6 +3,7 @@ import api from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
+import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Importamos o componente
 import { 
   Building2, Mail, Shield, Loader2, AlertCircle, 
   Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, Ban, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info
@@ -13,7 +14,6 @@ export default function Tenants() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
-  const [showPerfDetails, setShowPerfDetails] = useState(false);
   const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -636,22 +636,9 @@ export default function Tenants() {
         </div>
         
         <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 relative">
-          <div className="relative">
-            <button onClick={() => setShowPerfDetails(!showPerfDetails)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors border ${showPerfDetails ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-transparent hover:bg-gray-100'}`} title="Clique para detalhes">
-              <Clock className="w-4 h-4" /> <span className="font-medium">Carregado em {perfMetrics.total}ms</span>
-            </button>
-            {showPerfDetails && (
-              <div className="absolute bottom-10 left-0 bg-white border border-gray-200 shadow-xl rounded-xl p-4 w-64 z-50 text-gray-700 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2"><Activity className="w-4 h-4 text-blue-600" /><h4 className="font-bold text-sm text-gray-900">Análise de Performance</h4></div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center"><span className="text-gray-500">Tempo de Rede:</span> <span className="font-semibold">{perfMetrics.network}ms</span></div>
-                  <div className="flex justify-between items-center"><span className="text-gray-500">API (Servidor):</span> <span className="font-semibold">{perfMetrics.server}ms</span></div>
-                  <div className="flex justify-between items-center"><span className="text-gray-500">Render (Browser):</span> <span className="font-semibold">{perfMetrics.browser}ms</span></div>
-                  <div className="pt-2 mt-2 border-t border-gray-100 flex justify-between items-center"><span className="font-bold text-gray-900">Tempo Total:</span> <span className="font-bold text-blue-600 text-base">{perfMetrics.total}ms</span></div>
-                </div>
-              </div>
-            )}
-          </div>
+          
+          {/* 👇 DRCODE: Usando o novo componente aqui */}
+          <PerformanceBadge metrics={perfMetrics} />
 
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
+import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Import do Componente
 import { 
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, 
   User, Loader2, Save, CalendarDays, Download, Edit2, Lock, 
@@ -25,6 +26,8 @@ export default function Agenda() {
   const [isLoading, setIsLoading] = useState(true);
   const [isWaitlistLoading, setIsWaitlistLoading] = useState(false);
   
+  const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 }); // 👇 Estado de Performance
+
   const [viewMode, setViewMode] = useState('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -56,7 +59,6 @@ export default function Agenda() {
   const [newCustomerData, setNewCustomerData] = useState({ nome: '', telefone: '', email: '', status: 'ATIVO' });
   const dropdownRef = useRef(null);
 
-  // 👇 DRCODE: Corrigido de profissional_id para professional_id
   const [formData, setFormData] = useState({
     customer_id: '', professional_id: '', servico_id: '', data_hora_inicio: '',
     data_hora_fim: '', status: 'PENDENTE', observacoes_internas: '', tenant_id: '',
@@ -74,6 +76,7 @@ export default function Agenda() {
 
   const fetchData = async () => {
     setIsLoading(true);
+    const startTime = performance.now(); // 👇 Início do cronômetro
     try {
       const token = localStorage.getItem('medsched_token');
       if (!token) return;
@@ -88,6 +91,7 @@ export default function Agenda() {
         api.get('/billing/fees', { params: { tenant_id: tenantId } }),
         api.get('/billing/agreements', { params: { tenant_id: tenantId } })
       ]);
+      const endTime = performance.now(); // 👇 Fim da API
 
       setAppointments(appRes.data);
       setCustomers(custRes.data.filter(c => c.status?.toLowerCase() === 'ativo'));
@@ -100,6 +104,24 @@ export default function Agenda() {
       setAgreements(agrRes.data.filter(a => a.ativo));
       
       fetchWaitlist(tenantId);
+
+      // 👇 Cálculo de Performance da Renderização
+      requestAnimationFrame(() => {
+        const renderTime = performance.now();
+        const apiTotal = Math.round(endTime - startTime);
+        const serverEstimate = Math.round(apiTotal * 0.35);
+        const networkEstimate = apiTotal - serverEstimate;
+        const browserEstimate = Math.round(renderTime - endTime);
+        
+        setPerfMetrics({
+          server: serverEstimate,
+          network: networkEstimate,
+          browser: browserEstimate,
+          api: apiTotal,
+          total: apiTotal + browserEstimate
+        });
+      });
+
     } catch (err) {
       toast.error("Erro ao sincronizar dados da agenda.");
     } finally {
@@ -658,6 +680,11 @@ export default function Agenda() {
                     </div>
                 </div>
             )}
+        </div>
+
+        {/* 👇 DRCODE: FOOTER DE PERFORMANCE FIXO */}
+        <div className="px-6 py-3 bg-white border-t border-slate-200 flex justify-start items-center shrink-0 z-10">
+            <PerformanceBadge metrics={perfMetrics} />
         </div>
 
         {/* MODAL DE VISÃO DIÁRIA */}

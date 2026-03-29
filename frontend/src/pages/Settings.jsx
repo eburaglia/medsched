@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import Layout from '../components/Layout';
+import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Importamos o componente
 import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug } from 'lucide-react';
 
 export default function Settings() {
@@ -12,6 +13,8 @@ export default function Settings() {
   const [tenantId, setTenantId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
+  const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 });
+
   // Guardando os dados inteiros do Tenant para o PUT
   const [fullTenantData, setFullTenantData] = useState(null);
 
@@ -25,13 +28,36 @@ export default function Settings() {
 
         if (targetId) {
           setTenantId(targetId);
+          
+          const startTime = performance.now(); // Inicia o cronômetro
+          
           api.get(`/tenants/${targetId}`).then(res => {
+            const endTime = performance.now(); // Fim da API
+            
             setFullTenantData(res.data);
             
             const configVisuais = res.data.configuracoes_visuais || {};
             if (configVisuais.cor_primaria) {
               setCorPrimaria(configVisuais.cor_primaria);
             }
+
+            // Calcula a performance do render
+            requestAnimationFrame(() => {
+              const renderTime = performance.now();
+              const apiTotal = Math.round(endTime - startTime);
+              const serverEstimate = Math.round(apiTotal * 0.35);
+              const networkEstimate = apiTotal - serverEstimate;
+              const browserEstimate = Math.round(renderTime - endTime);
+              
+              setPerfMetrics({
+                server: serverEstimate,
+                network: networkEstimate,
+                browser: browserEstimate,
+                api: apiTotal,
+                total: apiTotal + browserEstimate
+              });
+            });
+
           }).catch(console.error);
         }
       } catch (e) {
@@ -164,6 +190,11 @@ export default function Settings() {
               {isSaving ? "Salvando..." : "Salvar Configuração"}
             </button>
           </div>
+        </div>
+
+        {/* 👇 DRCODE: Nosso novo componente de performance adicionado no rodapé */}
+        <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 border-t border-gray-200 mt-4">
+          <PerformanceBadge metrics={perfMetrics} />
         </div>
 
       </div>

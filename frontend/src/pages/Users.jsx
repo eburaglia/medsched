@@ -4,6 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
+import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Componente importado
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
   Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, MapPin, ChevronUp, ChevronDown, CheckCircle
@@ -16,7 +17,6 @@ export default function Users() {
   const [error, setError] = useState('');
   const [currentUserId, setCurrentUserId] = useState(null);
   
-  const [showPerfDetails, setShowPerfDetails] = useState(false);
   const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -163,7 +163,23 @@ export default function Users() {
           }
       }
 
-      setPerfMetrics(p => ({ ...p, total: Math.round(endTime - startTime) }));
+      // 👇 DRCODE: Lógica de performance padronizada
+      requestAnimationFrame(() => {
+        const renderTime = performance.now();
+        const apiTotal = Math.round(endTime - startTime);
+        const serverEstimate = Math.round(apiTotal * 0.35);
+        const networkEstimate = apiTotal - serverEstimate;
+        const browserEstimate = Math.round(renderTime - endTime);
+        
+        setPerfMetrics({
+          server: serverEstimate,
+          network: networkEstimate,
+          browser: browserEstimate,
+          api: apiTotal,
+          total: apiTotal + browserEstimate
+        });
+      });
+
     } catch (err) {
       setError("Falha ao carregar usuários.");
     } finally {
@@ -387,8 +403,6 @@ export default function Users() {
             payload.nova_senha = resetPasswordValue;
         }
 
-        // 👇 DRCODE: CORREÇÃO VITAL! Substituído "selectedUsers[0]" pelo ID real que está na edição. 
-        // Isso impede que a URL fique "undefined" e gere o erro 422!
         const res = await api.post(`/users/${editingAuditData.id}/reset-password`, payload, { params: { tenant_id: formData.tenant_id } });
         
         setResetResult(res.data);
@@ -780,6 +794,10 @@ export default function Users() {
         </div>
         
         <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 relative">
+          
+          {/* 👇 DRCODE: O componente visual de performance aqui! */}
+          <PerformanceBadge metrics={perfMetrics} />
+
           <div className="flex items-center gap-6 ml-auto">
             <div className="flex items-center gap-2">
               <span>Linhas por página:</span>
