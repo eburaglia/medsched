@@ -184,6 +184,35 @@ export default function Layout({ children }) {
       window.location.href = '/login';
   };
 
+  // 👇 DRCODE: Vigia de Inatividade (60 minutos)
+  useEffect(() => {
+    let timeoutId;
+    const INACTIVITY_TIME = 60 * 60 * 1000; // 60 minutos em milissegundos
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        // Se bater 60 minutos sem ninguém mexer, desloga por segurança
+        localStorage.clear();
+        // Redireciona e limpa cache da sessão
+        window.location.href = '/login'; 
+      }, INACTIVITY_TIME);
+    };
+
+    // Inicia o cronômetro assim que o Layout carrega
+    resetTimer();
+
+    // Eventos de teclado, mouse e tela touch que resetam o cronômetro
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+
+    // Limpeza da memória ao sair da tela
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, []);
+
   if (!isThemeLoaded) {
       return (
           <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
