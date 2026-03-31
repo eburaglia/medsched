@@ -4,7 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
-import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Import do Componente
+import PerformanceBadge from '../components/PerformanceBadge'; 
 import { 
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, 
   User, Loader2, Save, CalendarDays, Download, Edit2, Lock, 
@@ -22,11 +22,12 @@ export default function Agenda() {
   const [services, setServices] = useState([]);
   const [fees, setFees] = useState([]);
   const [agreements, setAgreements] = useState([]);
+  const [holidays, setHolidays] = useState([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isWaitlistLoading, setIsWaitlistLoading] = useState(false);
   
-  const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 }); // 👇 Estado de Performance
+  const [perfMetrics, setPerfMetrics] = useState({ network: 0, server: 0, browser: 0, api: 0, total: 0 }); 
 
   const [viewMode, setViewMode] = useState('month');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -74,24 +75,32 @@ export default function Agenda() {
     observacoes: '', status: 'AGUARDANDO', tenant_id: ''
   });
 
+  const getFormatYYYYMMDD = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   const fetchData = async () => {
     setIsLoading(true);
-    const startTime = performance.now(); // 👇 Início do cronômetro
+    const startTime = performance.now(); 
     try {
       const token = localStorage.getItem('medsched_token');
       if (!token) return;
       const decoded = jwtDecode(token);
       const tenantId = decoded.tenant_id || localStorage.getItem('selected_tenant_id');
 
-      const [appRes, custRes, profRes, servRes, feesRes, agrRes] = await Promise.all([
+      const [appRes, custRes, profRes, servRes, feesRes, agrRes, holRes] = await Promise.all([
         api.get('/appointments/', { params: { tenant_id: tenantId } }),
         api.get('/customers/', { params: { tenant_id: tenantId } }),
         api.get('/users/', { params: { tenant_id: tenantId } }),
         api.get('/services/', { params: { tenant_id: tenantId } }),
         api.get('/billing/fees', { params: { tenant_id: tenantId } }),
-        api.get('/billing/agreements', { params: { tenant_id: tenantId } })
+        api.get('/billing/agreements', { params: { tenant_id: tenantId } }),
+        api.get('/holidays/', { params: { tenant_id: tenantId } })
       ]);
-      const endTime = performance.now(); // 👇 Fim da API
+      const endTime = performance.now(); 
 
       setAppointments(appRes.data);
       setCustomers(custRes.data.filter(c => c.status?.toLowerCase() === 'ativo'));
@@ -102,10 +111,10 @@ export default function Agenda() {
       setServices(servRes.data.filter(s => s.status === 'ativo'));
       setFees(feesRes.data);
       setAgreements(agrRes.data.filter(a => a.ativo));
+      setHolidays(holRes.data);
       
       fetchWaitlist(tenantId);
 
-      // 👇 Cálculo de Performance da Renderização
       requestAnimationFrame(() => {
         const renderTime = performance.now();
         const apiTotal = Math.round(endTime - startTime);
@@ -207,37 +216,107 @@ export default function Agenda() {
     return appointments.filter(app => app.professional_id === selectedProfessional);
   }, [appointments, selectedProfessional]);
 
+  // 👇 DRCODE: Adicionado cruzamento da escala/férias do profissional na visualização MENSAL
   const monthCells = useMemo(() => {
     if (viewMode !== 'month') return [];
     const year = currentDate.getFullYear(); const month = currentDate.getMonth();
     const firstDayOfMonth = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate(); const daysInPrevMonth = new Date(year, month, 0).getDate();
     const cells = [];
-    for (let i = firstDayOfMonth - 1; i >= 0; i--) { cells.push({ type: 'prev', day: daysInPrevMonth - i, date: new Date(year, month - 1, daysInPrevMonth - i), id: `prev-${i}`, appointments: [] }); }
+    
+    const prof = selectedProfessional ? professionals.find(p => p.id === selectedProfessional) : null;
+
+    for (let i = firstDayOfMonth - 1; i >= 0; i--) { 
+      cells.push({ type: 'prev', day: daysInPrevMonth - i, date: new Date(year, month - 1, daysInPrevMonth - i), id: `prev-${i}`, appointments: [] }); 
+    }
+    
     for (let d = 1; d <= daysInMonth; d++) {
       const cellDate = new Date(year, month, d);
+      const dateStr = getFormatYYYYMMDD(cellDate);
+      const holiday = holidays.find(h => h.data === dateStr);
+
+      let isProfOffDay = false;
+      let isProfVacation = false;
+      
+      if (prof) {
+          if (prof.dias_atendimento && Array.isArray(prof.dias_atendimento)) {
+              isProfOffDay = !prof.dias_atendimento.includes(cellDate.getDay());
+          }
+          if (prof.ferias_inicio && prof.ferias_fim) {
+              const fInicio = new Date(prof.ferias_inicio); fInicio.setHours(0,0,0,0);
+              const fFim = new Date(prof.ferias_fim); fFim.setHours(23,59,59,999);
+              if (cellDate >= fInicio && cellDate <= fFim) isProfVacation = true;
+          }
+      }
+
       const dayAppointments = filteredAppointments.filter(app => { const appDate = new Date(app.data_hora_inicio); return appDate.getDate() === d && appDate.getMonth() === month && appDate.getFullYear() === year; });
       dayAppointments.sort((a, b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
-      cells.push({ type: 'current', day: d, date: cellDate, appointments: dayAppointments, id: `curr-${d}` });
+      cells.push({ type: 'current', day: d, date: cellDate, appointments: dayAppointments, id: `curr-${d}`, holiday, isProfOffDay, isProfVacation });
     }
+    
     const remainingCells = 42 - cells.length;
-    for (let d = 1; d <= remainingCells; d++) { cells.push({ type: 'next', day: d, date: new Date(year, month + 1, d), id: `next-${d}`, appointments: [] }); }
+    for (let d = 1; d <= remainingCells; d++) { 
+      cells.push({ type: 'next', day: d, date: new Date(year, month + 1, d), id: `next-${d}`, appointments: [] }); 
+    }
     return cells;
-  }, [currentDate, filteredAppointments, viewMode]);
+  }, [currentDate, filteredAppointments, viewMode, holidays, selectedProfessional, professionals]);
 
+  // 👇 DRCODE: Adicionado cruzamento da escala/férias do profissional na visualização SEMANAL
   const weekCells = useMemo(() => {
     if (viewMode !== 'week') return [];
     const startOfWeek = new Date(currentDate); startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); startOfWeek.setHours(0,0,0,0);
+    const prof = selectedProfessional ? professionals.find(p => p.id === selectedProfessional) : null;
+
     return Array.from({length: 7}).map((_, i) => {
         const d = new Date(startOfWeek); d.setDate(d.getDate() + i);
+        const dateStr = getFormatYYYYMMDD(d);
+        const holiday = holidays.find(h => h.data === dateStr); 
+        
+        let isProfOffDay = false;
+        let isProfVacation = false;
+        if (prof) {
+            if (prof.dias_atendimento && Array.isArray(prof.dias_atendimento)) {
+                isProfOffDay = !prof.dias_atendimento.includes(d.getDay());
+            }
+            if (prof.ferias_inicio && prof.ferias_fim) {
+                const fInicio = new Date(prof.ferias_inicio); fInicio.setHours(0,0,0,0);
+                const fFim = new Date(prof.ferias_fim); fFim.setHours(23,59,59,999);
+                if (d >= fInicio && d <= fFim) isProfVacation = true;
+            }
+        }
+
         const apps = filteredAppointments.filter(app => { const ad = new Date(app.data_hora_inicio); return ad.getDate() === d.getDate() && ad.getMonth() === d.getMonth() && ad.getFullYear() === d.getFullYear(); }).sort((a,b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
-        return { date: d, day: d.getDate(), appointments: apps, isToday: d.toDateString() === new Date().toDateString() };
+        return { date: d, day: d.getDate(), appointments: apps, isToday: d.toDateString() === new Date().toDateString(), holiday, isProfOffDay, isProfVacation };
     });
-  }, [currentDate, filteredAppointments, viewMode]);
+  }, [currentDate, filteredAppointments, viewMode, holidays, selectedProfessional, professionals]);
 
   const dayAppointments = useMemo(() => {
     if (viewMode !== 'day') return [];
     return filteredAppointments.filter(app => { const d = new Date(app.data_hora_inicio); return d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear(); }).sort((a,b) => new Date(a.data_hora_inicio) - new Date(b.data_hora_inicio));
   }, [currentDate, filteredAppointments, viewMode]);
+
+  const currentDayHoliday = useMemo(() => {
+      return holidays.find(h => h.data === getFormatYYYYMMDD(currentDate));
+  }, [currentDate, holidays]);
+  const isCurrentDayBlocked = currentDayHoliday && !currentDayHoliday.havera_expediente;
+
+  // 👇 DRCODE: Avaliando se a vista Diária cai num dia de ausência do Profissional selecionado
+  const activeProf = selectedProfessional ? professionals.find(p => p.id === selectedProfessional) : null;
+  let isCurrentDayProfBlocked = false;
+  let profBlockReason = "";
+  if (activeProf) {
+      if (activeProf.dias_atendimento && !activeProf.dias_atendimento.includes(currentDate.getDay())) {
+          isCurrentDayProfBlocked = true;
+          profBlockReason = "Fora da Escala";
+      }
+      if (activeProf.ferias_inicio && activeProf.ferias_fim) {
+          const fInicio = new Date(activeProf.ferias_inicio); fInicio.setHours(0,0,0,0);
+          const fFim = new Date(activeProf.ferias_fim); fFim.setHours(23,59,59,999);
+          if (currentDate >= fInicio && currentDate <= fFim) {
+              isCurrentDayProfBlocked = true;
+              profBlockReason = "Em Férias / Ausente";
+          }
+      }
+  }
 
   const getCustomerName = (id) => customers.find(c => c.id === id)?.nome || 'Cliente';
   const getProfName = (id) => professionals.find(p => p.id === id)?.nome || 'Profissional';
@@ -300,8 +379,23 @@ export default function Agenda() {
   };
 
   const handleOpenCreate = (date = null) => {
+    let start = new Date(); 
+    if (date) { 
+        start = new Date(date); 
+        if (start.toDateString() !== new Date().toDateString()) start.setHours(9, 0, 0); 
+    }
+    
+    // A trava da Clínica/Feriado continua RÍGIDA
+    const startStr = getFormatYYYYMMDD(start);
+    const isHolidayBlocked = holidays.find(h => h.data === startStr && !h.havera_expediente);
+    
+    if (isHolidayBlocked) {
+        toast.error(`Atenção: ${isHolidayBlocked.nome}. A clínica estará fechada nesta data!`);
+        return; 
+    }
+
     setModalMode('create'); setEditingId(null); setIsRecurring(false); setProjection(null); setCustomerSearch('');
-    let start = new Date(); if (date) { start = new Date(date); if (start.toDateString() !== new Date().toDateString()) start.setHours(9, 0, 0); }
+    
     let end = new Date(start); end.setHours(start.getHours() + 1);
     const format = (d) => { d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 
@@ -332,6 +426,42 @@ export default function Agenda() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.customer_id) { toast.error("Por favor, selecione um cliente no buscador."); return; }
+    
+    // 1. Trava da Clínica (Rígida)
+    const startStrForSave = formData.data_hora_inicio.split('T')[0];
+    const isHolidayBlocked = holidays.find(h => h.data === startStrForSave && !h.havera_expediente);
+    if (isHolidayBlocked) {
+         toast.error(`Não é possível agendar. A data cai no feriado: ${isHolidayBlocked.nome}`);
+         return;
+    }
+
+    // 👇 DRCODE: 2. Trava do Profissional (Flexível / Ad-Hoc)
+    const profToSave = professionals.find(p => p.id === formData.professional_id);
+    if (profToSave) {
+        const startDate = new Date(formData.data_hora_inicio);
+        const dayOfWeek = startDate.getDay();
+        
+        let isOffDay = false;
+        if (profToSave.dias_atendimento && Array.isArray(profToSave.dias_atendimento)) {
+            isOffDay = !profToSave.dias_atendimento.includes(dayOfWeek);
+        }
+
+        let isVacation = false;
+        if (profToSave.ferias_inicio && profToSave.ferias_fim) {
+            const fInicio = new Date(profToSave.ferias_inicio); fInicio.setHours(0,0,0,0);
+            const fFim = new Date(profToSave.ferias_fim); fFim.setHours(23,59,59,999);
+            if (startDate >= fInicio && startDate <= fFim) isVacation = true;
+        }
+
+        if (isOffDay || isVacation) {
+            const reason = isVacation ? "está em período de ausência/férias" : "normalmente não atende neste dia da semana";
+            const confirmAdHoc = window.confirm(`ATENÇÃO!\nO(a) profissional ${profToSave.nome} ${reason}.\n\nDeseja forçar este agendamento como uma exceção (Ad-Hoc)?`);
+            if (!confirmAdHoc) {
+                return; // Usuário abortou o Ad-Hoc
+            }
+        }
+    }
+
     setIsSaving(true);
     try {
       const startIso = new Date(formData.data_hora_inicio).toISOString();
@@ -548,6 +678,22 @@ export default function Agenda() {
           </div>
         </header>
 
+        {/* AVISO DE FERIADO GERAL DA CLÍNICA */}
+        {activeMainTab === 'calendar' && viewMode === 'day' && isCurrentDayBlocked && (
+            <div className="bg-red-100 border-b border-red-200 p-2.5 flex items-center justify-center gap-2 text-red-700 text-sm font-bold shadow-inner">
+                <AlertTriangle className="w-5 h-5" /> 
+                Atenção: A clínica estará fechada neste dia devido ao feriado "{currentDayHoliday.nome}". Marcações estão bloqueadas.
+            </div>
+        )}
+
+        {/* 👇 DRCODE: AVISO DE PROFISSIONAL AUSENTE NO DIA */}
+        {activeMainTab === 'calendar' && viewMode === 'day' && isCurrentDayProfBlocked && !isCurrentDayBlocked && (
+            <div className="bg-orange-100 border-b border-orange-200 p-2.5 flex items-center justify-center gap-2 text-orange-700 text-sm font-bold shadow-inner">
+                <AlertTriangle className="w-5 h-5" /> 
+                Atenção: O profissional selecionado ({activeProf.nome}) encontra-se {profBlockReason} neste dia. Agendamentos serão exceções (Ad-Hoc).
+            </div>
+        )}
+
         {/* ÁREA CENTRAL DE RENDERIZAÇÃO */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
             {activeMainTab === 'waitlist' && (
@@ -584,6 +730,7 @@ export default function Agenda() {
               </div>
             )}
 
+            {/* VISTA DO MÊS */}
             {activeMainTab === 'calendar' && viewMode === 'month' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full min-h-[600px]">
                     <div className="border-b border-slate-200 bg-slate-50 sticky top-0 z-10 grid grid-cols-7">
@@ -592,41 +739,102 @@ export default function Agenda() {
                     <div className="flex-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: 'minmax(130px, 1fr)' }}>
                     {isLoading ? ( <div className="col-span-7 py-20 flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div> ) : (
                         monthCells.map((cell) => {
-                        const isToday = cell.type === 'current' && cell.date.toDateString() === new Date().toDateString();
-                        const isMuted = cell.type !== 'current'; const totalAppts = cell.appointments.length; const completedAppts = cell.appointments.filter(a => a.status === 'concluido').length;
-                        return (
-                            <div key={cell.id} onClick={() => !isMuted && (setSelectedDailyCell(cell), setIsDailyModalOpen(true))} className={`p-2 flex flex-col group transition-all border-r border-b border-slate-200 ${isMuted ? 'opacity-40 grayscale' : 'cursor-pointer bg-white hover:bg-slate-50'} ${isToday ? 'ring-2 ring-inset ring-blue-500 z-10 shadow-sm' : ''}`} style={isMuted ? {backgroundImage: 'repeating-linear-gradient(45deg, #f8fafc, #f8fafc 6px, #f1f5f9 6px, #f1f5f9 12px)'} : {}}>
-                            <div className="flex justify-between items-start">
-                                <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-lg shadow-sm ${isToday ? 'bg-blue-600 text-white' : 'text-slate-600 bg-white border border-slate-100'}`}>{cell.day}</span>
-                                {!isMuted && <button onClick={(e) => {e.stopPropagation(); handleOpenCreate(cell.date)}} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-blue-100 rounded text-blue-600"><Plus className="w-4 h-4" /></button>}
-                            </div>
-                            <div className="flex-1"></div>
-                            {!isMuted && totalAppts > 0 && (
-                                <div className="flex flex-col gap-1 w-full mt-2">
-                                <div className="text-[11px] px-2 py-1 rounded shadow-sm border border-slate-200 truncate flex justify-between items-center" style={{backgroundColor: '#EDE8D0'}}><span>Agendados</span><strong>{totalAppts}</strong></div>
-                                {completedAppts > 0 && <div className="text-[11px] px-2 py-1 rounded shadow-sm border border-[#76d676] truncate flex justify-between items-center" style={{backgroundColor: '#88E788'}}><span>Concluídos</span><strong>{completedAppts}</strong></div>}
+                          const isToday = cell.type === 'current' && cell.date.toDateString() === new Date().toDateString();
+                          const isMuted = cell.type !== 'current'; 
+                          const totalAppts = cell.appointments.length; 
+                          const completedAppts = cell.appointments.filter(a => a.status === 'concluido').length;
+                          
+                          const isNoWorkHoliday = cell.holiday && !cell.holiday.havera_expediente;
+                          const isProfBlocked = cell.isProfOffDay || cell.isProfVacation;
+
+                          const cellStyle = isMuted 
+                            ? {backgroundImage: 'repeating-linear-gradient(45deg, #f8fafc, #f8fafc 6px, #f1f5f9 6px, #f1f5f9 12px)'} 
+                            : isNoWorkHoliday 
+                            ? {backgroundImage: 'repeating-linear-gradient(45deg, #fef2f2, #fef2f2 6px, #fecaca 6px, #fecaca 12px)'} 
+                            : {};
+
+                          return (
+                              <div key={cell.id} 
+                                   onClick={() => {
+                                      if (isMuted) return;
+                                      if (isNoWorkHoliday) { toast.error(`Feriado: ${cell.holiday.nome}. Não haverá expediente.`); return; }
+                                      setSelectedDailyCell(cell); setIsDailyModalOpen(true);
+                                   }} 
+                                   className={`p-2 flex flex-col group transition-all border-r border-b border-slate-200 ${isNoWorkHoliday ? 'cursor-not-allowed opacity-90' : isMuted ? 'opacity-40 grayscale' : 'cursor-pointer hover:bg-slate-50'} ${isToday ? 'ring-2 ring-inset ring-blue-500 z-10 shadow-sm' : ''} ${isNoWorkHoliday && cell.type === 'current' ? 'bg-red-50/50' : 'bg-white'}`} 
+                                   style={cellStyle}
+                              >
+                                <div className="flex justify-between items-start">
+                                    <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-lg shadow-sm ${isToday ? 'bg-blue-600 text-white' : 'text-slate-600 bg-white border border-slate-100'}`}>{cell.day}</span>
+                                    {!isMuted && !isNoWorkHoliday && <button onClick={(e) => {e.stopPropagation(); handleOpenCreate(cell.date)}} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-blue-100 rounded text-blue-600"><Plus className="w-4 h-4" /></button>}
+                                    {!isMuted && isNoWorkHoliday && <Lock className="w-4 h-4 text-red-400 mt-1 mr-1" title="Fechado" />}
                                 </div>
-                            )}
-                            </div>
-                        );
+                                
+                                {cell.holiday && cell.type === 'current' && (
+                                    <div className={`mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded truncate w-full shadow-sm ${!cell.holiday.havera_expediente ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`} title={cell.holiday.nome}>
+                                      🏖️ {cell.holiday.nome}
+                                    </div>
+                                )}
+
+                                {/* 👇 DRCODE: Tag do Profissional Ausente */}
+                                {isProfBlocked && cell.type === 'current' && !isNoWorkHoliday && (
+                                    <div className="mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded truncate w-full shadow-sm bg-orange-100 text-orange-700 border border-orange-200" title={cell.isProfVacation ? "Profissional de Férias" : "Fora da escala do profissional"}>
+                                      ⚠️ {cell.isProfVacation ? "Férias" : "Fora de Escala"}
+                                    </div>
+                                )}
+
+                                <div className="flex-1"></div>
+                                {!isMuted && totalAppts > 0 && (
+                                    <div className="flex flex-col gap-1 w-full mt-2">
+                                    <div className="text-[11px] px-2 py-1 rounded shadow-sm border border-slate-200 truncate flex justify-between items-center" style={{backgroundColor: '#EDE8D0'}}><span>Agendados</span><strong>{totalAppts}</strong></div>
+                                    {completedAppts > 0 && <div className="text-[11px] px-2 py-1 rounded shadow-sm border border-[#76d676] truncate flex justify-between items-center" style={{backgroundColor: '#88E788'}}><span>Concluídos</span><strong>{completedAppts}</strong></div>}
+                                    </div>
+                                )}
+                              </div>
+                          );
                         })
                     )}
                     </div>
                 </div>
             )}
 
+            {/* VISTA DA SEMANA */}
             {activeMainTab === 'calendar' && viewMode === 'week' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full min-h-[600px]">
                     <div className="border-b border-slate-200 bg-slate-50 sticky top-0 z-10 grid grid-cols-7 divide-x divide-slate-200 shadow-sm">
-                        {weekCells.map((cell, idx) => ( <div key={idx} className={`py-4 flex flex-col items-center justify-center gap-1 ${cell.isToday ? 'bg-blue-50' : ''}`}><span className={`text-[10px] font-bold uppercase tracking-wider ${cell.isToday ? 'text-blue-600' : 'text-slate-400'}`}>{weekDays[idx]}</span><span className={`text-xl font-black ${cell.isToday ? 'text-blue-700' : 'text-slate-700'}`}>{cell.day}</span></div> ))}
+                        {weekCells.map((cell, idx) => ( <div key={idx} className={`py-4 flex flex-col items-center justify-center gap-1 ${cell.isToday ? 'bg-blue-50' : cell.holiday && !cell.holiday.havera_expediente ? 'bg-red-50/50' : ''}`}><span className={`text-[10px] font-bold uppercase tracking-wider ${cell.isToday ? 'text-blue-600' : cell.holiday && !cell.holiday.havera_expediente ? 'text-red-500' : 'text-slate-400'}`}>{weekDays[idx]}</span><span className={`text-xl font-black ${cell.isToday ? 'text-blue-700' : cell.holiday && !cell.holiday.havera_expediente ? 'text-red-700' : 'text-slate-700'}`}>{cell.day}</span></div> ))}
                     </div>
                     <div className="flex-1 grid grid-cols-7 divide-x divide-slate-100 bg-slate-50/30 overflow-hidden">
                         {isLoading ? ( <div className="col-span-7 flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div> ) : (
-                            weekCells.map((cell, idx) => (
-                                <div key={idx} className={`p-2 flex flex-col h-full overflow-y-auto no-scrollbar transition-all ${cell.isToday ? 'bg-blue-50/20' : 'hover:bg-slate-50/80'} ${cell.date < todayAtMidnight && !cell.isToday ? 'opacity-60 grayscale-[30%]' : ''}`}>
-                                    <div className="flex justify-end mb-2"><button onClick={() => handleOpenCreate(cell.date)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="Adicionar no dia"><Plus className="w-4 h-4" /></button></div>
+                            weekCells.map((cell, idx) => {
+                              const isNoWorkHoliday = cell.holiday && !cell.holiday.havera_expediente;
+                              const cellStyle = isNoWorkHoliday ? {backgroundImage: 'repeating-linear-gradient(45deg, #fef2f2, #fef2f2 6px, #fecaca 6px, #fecaca 12px)'} : {};
+
+                              return (
+                                <div key={idx} className={`p-2 flex flex-col h-full overflow-y-auto no-scrollbar transition-all ${isNoWorkHoliday ? 'bg-red-50/30 opacity-90' : cell.isToday ? 'bg-blue-50/20' : 'hover:bg-slate-50/80'} ${cell.date < todayAtMidnight && !cell.isToday ? 'opacity-60 grayscale-[30%]' : ''}`} style={cellStyle}>
+                                    
+                                    {cell.holiday && (
+                                      <div className={`text-center text-[9px] font-bold px-1 py-1 rounded truncate mb-2 shadow-sm ${!cell.holiday.havera_expediente ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`} title={cell.holiday.nome}>
+                                        🏖️ {cell.holiday.nome}
+                                      </div>
+                                    )}
+
+                                    {/* 👇 DRCODE: Tag do Profissional Ausente na Semana */}
+                                    {(!isNoWorkHoliday && (cell.isProfOffDay || cell.isProfVacation)) ? (
+                                      <div className="text-center text-[9px] font-bold px-1 py-1 rounded truncate mb-2 shadow-sm bg-orange-100 text-orange-700 border border-orange-200" title={cell.isProfVacation ? "Profissional de Férias" : "Fora da escala do profissional"}>
+                                        ⚠️ {cell.isProfVacation ? "Férias" : "Fora de Escala"}
+                                      </div>
+                                    ) : null}
+
+                                    <div className="flex justify-end mb-2">
+                                      {!isNoWorkHoliday ? (
+                                        <button onClick={() => handleOpenCreate(cell.date)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="Adicionar no dia"><Plus className="w-4 h-4" /></button>
+                                      ) : (
+                                        <Lock className="w-4 h-4 text-red-300 mr-1" title="Fechado" />
+                                      )}
+                                    </div>
+                                    
                                     <div className="flex flex-col gap-2">
-                                        {cell.appointments.length === 0 ? ( <div className="text-center text-[10px] font-bold text-slate-300 py-4 uppercase">Livre</div> ) : (
+                                        {cell.appointments.length === 0 ? ( <div className="text-center text-[10px] font-bold text-slate-300 py-4 uppercase">{isNoWorkHoliday ? 'Fechado' : 'Livre'}</div> ) : (
                                             cell.appointments.map(app => (
                                                 <div key={app.id} onClick={() => handleOpenEdit(app)} className={`p-2 rounded-lg border shadow-sm cursor-pointer hover:-translate-y-0.5 transition-all ${getLightStatusClasses(app.status)} ${app.is_encaixe ? 'border-r-4 border-r-orange-400' : ''}`}>
                                                     <div className="flex justify-between items-start mb-1">
@@ -640,19 +848,29 @@ export default function Agenda() {
                                         )}
                                     </div>
                                 </div>
-                            ))
+                              );
+                            })
                         )}
                     </div>
                 </div>
             )}
 
+            {/* VISTA DO DIA */}
             {activeMainTab === 'calendar' && viewMode === 'day' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full min-h-[600px]">
                     <div className="border-b border-slate-200 bg-slate-50 p-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-                        <div className="flex items-center gap-3"><span className="text-3xl font-black text-blue-600">{currentDate.getDate()}</span><div className="flex flex-col"><span className="text-sm font-bold text-slate-700 capitalize">{weekDays[currentDate.getDay()]}-feira</span><span className="text-xs font-semibold text-slate-500">{monthNames[currentDate.getMonth()]} de {currentDate.getFullYear()}</span></div></div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-3xl font-black ${isCurrentDayBlocked ? 'text-red-600' : isCurrentDayProfBlocked ? 'text-orange-500' : 'text-blue-600'}`}>{currentDate.getDate()}</span>
+                          <div className="flex flex-col">
+                            <span className={`text-sm font-bold capitalize ${isCurrentDayBlocked ? 'text-red-700' : isCurrentDayProfBlocked ? 'text-orange-700' : 'text-slate-700'}`}>{weekDays[currentDate.getDay()]}-feira</span>
+                            <span className="text-xs font-semibold text-slate-500">{monthNames[currentDate.getMonth()]} de {currentDate.getFullYear()}</span>
+                          </div>
+                        </div>
                         <div className="flex items-center gap-3">
                             <button onClick={() => exportCSV(dayAppointments, currentDate.toISOString().split('T')[0], 'Agenda_Diaria')} disabled={dayAppointments.length === 0} className="flex items-center gap-2 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-slate-300 shadow-sm"><Download className="w-4 h-4" /> Exportar Lista</button>
-                            <button onClick={() => handleOpenCreate(currentDate)} className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-blue-200 shadow-sm"><Plus className="w-4 h-4" /> Adicionar Serviço</button>
+                            <button onClick={() => handleOpenCreate(currentDate)} disabled={isCurrentDayBlocked} className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-blue-200 shadow-sm disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed">
+                              {isCurrentDayBlocked ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />} Adicionar Serviço
+                            </button>
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto">
@@ -662,7 +880,14 @@ export default function Agenda() {
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
                                 {isLoading ? ( <tr><td colSpan="6" className="text-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto" /></td></tr> ) : dayAppointments.length === 0 ? (
-                                    <tr><td colSpan="6" className="text-center py-20"><div className="flex flex-col items-center justify-center text-slate-400"><Calendar className="w-12 h-12 mb-3 text-slate-200" /><p className="font-bold text-lg">Agenda Livre</p></div></td></tr>
+                                    <tr>
+                                      <td colSpan="6" className="text-center py-20">
+                                        <div className="flex flex-col items-center justify-center text-slate-400">
+                                          {isCurrentDayBlocked ? <Lock className="w-12 h-12 mb-3 text-red-200" /> : <Calendar className="w-12 h-12 mb-3 text-slate-200" />}
+                                          <p className="font-bold text-lg">{isCurrentDayBlocked ? 'Fechado (Feriado)' : 'Agenda Livre'}</p>
+                                        </div>
+                                      </td>
+                                    </tr>
                                 ) : (
                                     dayAppointments.map(app => (
                                         <tr key={app.id} className="hover:bg-slate-50/80 transition-colors group">
@@ -682,7 +907,6 @@ export default function Agenda() {
             )}
         </div>
 
-        {/* 👇 DRCODE: FOOTER DE PERFORMANCE FIXO */}
         <div className="px-6 py-3 bg-white border-t border-slate-200 flex justify-start items-center shrink-0 z-10">
             <PerformanceBadge metrics={perfMetrics} />
         </div>
@@ -703,9 +927,7 @@ export default function Agenda() {
           </div>
         </Modal>
 
-        {/* =========================================
-            MODAL DO AGENDAMENTO / ENCAIXE 
-           ========================================= */}
+        {/* MODAL DO AGENDAMENTO / ENCAIXE */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Agendar Serviço" : "Editar Agendamento"}>
           <form onSubmit={handleSave} className="flex flex-col max-h-[85vh]">
             <div className="overflow-y-auto pr-2 space-y-5 pb-2" style={{ maxHeight: 'calc(85vh - 80px)' }}>
@@ -856,9 +1078,7 @@ export default function Agenda() {
           </form>
         </Modal>
 
-        {/* =========================================
-            🚀 MODAL RÁPIDO PARA CRIAR CLIENTE 
-           ========================================= */}
+        {/* MODAL RÁPIDO PARA CRIAR CLIENTE */}
         <Modal isOpen={isNewCustomerModalOpen} onClose={() => setIsNewCustomerModalOpen(false)} title="Cadastro Rápido de Cliente">
           <form onSubmit={handleQuickAddCustomer} className="flex flex-col space-y-4">
             <p className="text-xs text-slate-500 mb-2">Preencha os dados básicos para adicionar o cliente e continuar o agendamento.</p>

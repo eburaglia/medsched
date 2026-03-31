@@ -8,7 +8,6 @@ class TenantBase(BaseModel):
     nome: str = Field(..., min_length=3, max_length=255)
     nome_fantasia: Optional[str] = Field(None, max_length=255)
     cnpj: Optional[str] = Field(None, max_length=20)
-    # 👇 DRCODE: Campos fiscais adicionados
     inscricao_estadual: Optional[str] = Field(None, max_length=50)
     inscricao_municipal: Optional[str] = Field(None, max_length=50)
     
@@ -26,6 +25,14 @@ class TenantBase(BaseModel):
     site_url: str = Field(..., max_length=255)
     email_contato: EmailStr = Field(...)
     telefone_contato: str = Field(..., max_length=20)
+    
+    # 👇 DRCODE: Campos de Redes Sociais adicionados
+    facebook_url: Optional[str] = Field(None, max_length=255)
+    twitter_url: Optional[str] = Field(None, max_length=255)
+    instagram_url: Optional[str] = Field(None, max_length=255)
+    youtube_url: Optional[str] = Field(None, max_length=255)
+    tiktok_url: Optional[str] = Field(None, max_length=255)
+    
     dominio_interno: str = Field(..., max_length=100)
     url_externa: str = Field(..., max_length=255)
     logotipo_url: str = Field(..., max_length=500)
@@ -40,7 +47,6 @@ class TenantUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=3, max_length=255)
     nome_fantasia: Optional[str] = Field(None, max_length=255)
     cnpj: Optional[str] = Field(None, max_length=20)
-    # 👇 DRCODE: Campos fiscais no Update
     inscricao_estadual: Optional[str] = Field(None, max_length=50)
     inscricao_municipal: Optional[str] = Field(None, max_length=50)
     
@@ -58,6 +64,14 @@ class TenantUpdate(BaseModel):
     site_url: Optional[str] = Field(None, max_length=255)
     email_contato: Optional[EmailStr] = None
     telefone_contato: Optional[str] = Field(None, max_length=20)
+    
+    # 👇 DRCODE: Campos de Redes Sociais no Update
+    facebook_url: Optional[str] = Field(None, max_length=255)
+    twitter_url: Optional[str] = Field(None, max_length=255)
+    instagram_url: Optional[str] = Field(None, max_length=255)
+    youtube_url: Optional[str] = Field(None, max_length=255)
+    tiktok_url: Optional[str] = Field(None, max_length=255)
+    
     dominio_interno: Optional[str] = Field(None, max_length=100)
     url_externa: Optional[str] = Field(None, max_length=255)
     logotipo_url: Optional[str] = Field(None, max_length=500)

@@ -18,7 +18,6 @@ class Tenant(AuditoriaMixin, Base):
     nome = Column(String(255), nullable=False)
     nome_fantasia = Column(String(255), nullable=True)
     cnpj = Column(String(20), unique=True, index=True, nullable=True)
-    # 👇 DRCODE: Nossas duas novas colunas fiscais
     inscricao_estadual = Column(String(50), nullable=True)
     inscricao_municipal = Column(String(50), nullable=True)
     
@@ -37,6 +36,13 @@ class Tenant(AuditoriaMixin, Base):
     site_url = Column(String(255), nullable=False)
     email_contato = Column(String(255), nullable=False)
     telefone_contato = Column(String(20), nullable=False)
+    
+    # 👇 DRCODE: Novas colunas de Redes Sociais
+    facebook_url = Column(String(255), nullable=True)
+    twitter_url = Column(String(255), nullable=True)
+    instagram_url = Column(String(255), nullable=True)
+    youtube_url = Column(String(255), nullable=True)
+    tiktok_url = Column(String(255), nullable=True)
     
     dominio_interno = Column(String(100), unique=True, index=True, nullable=False)
     url_externa = Column(String(255), nullable=False)

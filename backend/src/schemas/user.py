@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 from src.models.user import UserRole, UserStatus
@@ -21,6 +21,11 @@ class UserBase(BaseModel):
     endereco_regiao: Optional[str] = None
     
     preferencias_ui: Optional[Dict[str, Any]] = None
+
+    # 👇 DRCODE: Validação dos novos campos da agenda
+    dias_atendimento: Optional[List[int]] = None
+    ferias_inicio: Optional[datetime] = None
+    ferias_fim: Optional[datetime] = None
     
     papel: UserRole
     status: UserStatus = Field(default=UserStatus.PENDENTE)
@@ -45,6 +50,11 @@ class UserUpdate(BaseModel):
     endereco_regiao: Optional[str] = None
     
     preferencias_ui: Optional[Dict[str, Any]] = None
+
+    # 👇 DRCODE: Update dos novos campos
+    dias_atendimento: Optional[List[int]] = None
+    ferias_inicio: Optional[datetime] = None
+    ferias_fim: Optional[datetime] = None
 
 class UserResponse(UserBase):
     id: UUID

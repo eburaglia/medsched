@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import Layout from '../components/Layout';
 import PerformanceBadge from '../components/PerformanceBadge';
 import { 
-  Plus, Loader2, Search, Edit2, Trash2, Save, X, CalendarDays, MapPin, Flag, Building, Info
+  Plus, Loader2, Search, Edit2, Trash2, Save, X, CalendarDays, MapPin, Flag, Building, Info, Download 
 } from 'lucide-react';
 
 export default function Holidays() {
@@ -60,6 +60,37 @@ export default function Holidays() {
     const lowerSearch = searchTerm.toLowerCase();
     return holidays.filter(h => h.nome.toLowerCase().includes(lowerSearch) || h.tipo.toLowerCase().includes(lowerSearch));
   }, [holidays, searchTerm]);
+
+  // 👇 DRCODE: Nova função para exportar feriados
+  const handleExportCSV = () => {
+    const dataToExport = searchTerm ? filteredHolidays : holidays;
+    
+    if (dataToExport.length === 0) {
+      toast.error("Nenhum dado para exportar.");
+      return;
+    }
+
+    const csvRows = ['Data,Nome do Feriado,Tipo,Haverá Expediente'];
+    
+    dataToExport.forEach(h => {
+      const data = new Date(h.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+      const nome = h.nome.replace(/"/g, '""'); // Escapar aspas duplas
+      const tipo = h.tipo;
+      const expediente = h.havera_expediente ? 'Sim (Aberto)' : 'Nao (Fechado)';
+      csvRows.push(`"${data}","${nome}","${tipo}","${expediente}"`);
+    });
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.download = `feriados_${dateStr}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success(`${dataToExport.length} feriados exportados!`);
+  };
 
   const handleOpenCreate = () => { 
     setModalMode('create'); 
@@ -162,7 +193,8 @@ export default function Holidays() {
             <div className="border-t border-slate-200 pt-4 mt-2">
               <label className="flex items-center gap-3 cursor-pointer p-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
                 <div className="relative flex items-center">
-                  <input type="checkbox" className="sr-only peer" checked={formData.havera_expediente} onChange={e => setFormData({...formData, havera_expediente: e.target.value === 'true'})} />
+                  {/* 👇 DRCODE: CORREÇÃO AQUI - Trocado e.target.value por e.target.checked */}
+                  <input type="checkbox" className="sr-only peer" checked={formData.havera_expediente} onChange={e => setFormData({...formData, havera_expediente: e.target.checked})} />
                   <div className={`w-11 h-6 bg-slate-200 rounded-full peer transition-all ${formData.havera_expediente ? 'bg-blue-600' : ''}`}></div>
                   <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-all ${formData.havera_expediente ? 'translate-x-5' : ''}`}></div>
                 </div>
@@ -189,9 +221,16 @@ export default function Holidays() {
             </h1>
             <p className="text-slate-500 mt-1">Gerencie os dias em que a empresa não terá atendimento.</p>
           </div>
-          <button onClick={handleOpenCreate} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:bg-blue-700 flex items-center gap-2 transition-all">
-            <Plus className="w-5 h-5" /> Adicionar Data
-          </button>
+          
+          {/* 👇 DRCODE: NOVO BOTÃO DE EXPORTAÇÃO */}
+          <div className="flex items-center gap-3">
+            <button onClick={handleExportCSV} className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all">
+              <Download className="w-5 h-5" /> Exportar CSV
+            </button>
+            <button onClick={handleOpenCreate} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:bg-blue-700 flex items-center gap-2 transition-all">
+              <Plus className="w-5 h-5" /> Adicionar Data
+            </button>
+          </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">

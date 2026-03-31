@@ -4,10 +4,10 @@ import { jwtDecode } from 'jwt-decode';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
-import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Componente importado
+import PerformanceBadge from '../components/PerformanceBadge';
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
-  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, MapPin, ChevronUp, ChevronDown, CheckCircle
+  Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, MapPin, ChevronUp, ChevronDown, CheckCircle, CalendarOff 
 } from 'lucide-react';
 
 export default function Users() {
@@ -37,12 +37,16 @@ export default function Users() {
   
   const [batchToggles, setBatchToggles] = useState({ papel: false, status: false, endereco_cidade: false, endereco_estado: false });
 
+  const diasSemanaNomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  // 👇 DRCODE: Nova coluna 'dias_atendimento' adicionada aqui!
   const defaultColumns = [
     { id: 'id', label: 'ID', visible: false },
     { id: 'nome', label: 'Nome', visible: true },
     { id: 'email', label: 'Email', visible: true },
     { id: 'papel', label: 'Papel', visible: true },
     { id: 'telefone', label: 'Telefone', visible: true },
+    { id: 'dias_atendimento', label: 'Escala', visible: true }, 
     { id: 'status', label: 'Status', visible: true },
     { id: 'cpf', label: 'CPF', visible: false },
     { id: 'telefone_contato', label: 'Contato', visible: false },
@@ -62,7 +66,9 @@ export default function Users() {
     nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', tenant_id: '',
     cpf: '', telefone: '', telefone_contato: '', 
     endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '',
-    observacoes: ''
+    observacoes: '',
+    dias_atendimento: [1, 2, 3, 4, 5],
+    ferias_inicio: '', ferias_fim: ''
   });
 
   const [editingAuditData, setEditingAuditData] = useState(null);
@@ -163,7 +169,6 @@ export default function Users() {
           }
       }
 
-      // 👇 DRCODE: Lógica de performance padronizada
       requestAnimationFrame(() => {
         const renderTime = performance.now();
         const apiTotal = Math.round(endTime - startTime);
@@ -276,6 +281,7 @@ export default function Users() {
       nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', 
       cpf: '', telefone: '', telefone_contato: '', 
       endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '',
+      dias_atendimento: [1, 2, 3, 4, 5], ferias_inicio: '', ferias_fim: '',
       tenant_id: activeTenant
     }); 
     setIsModalOpen(true); 
@@ -290,7 +296,11 @@ export default function Users() {
         cpf: userToEdit.cpf || '', telefone: userToEdit.telefone || '', telefone_contato: userToEdit.telefone_contato || '',
         endereco_cep: userToEdit.endereco_cep || '', endereco_logradouro: userToEdit.endereco_logradouro || '', endereco_numero: userToEdit.endereco_numero || '', endereco_bairro: userToEdit.endereco_bairro || '', endereco_cidade: userToEdit.endereco_cidade || '',
         endereco_estado: userToEdit.endereco_estado || '', endereco_regiao: userToEdit.endereco_regiao || '', observacoes: userToEdit.observacoes || '',
-        senha: '', tenant_id: activeTenant 
+        senha: '', 
+        dias_atendimento: userToEdit.dias_atendimento || [1, 2, 3, 4, 5],
+        ferias_inicio: userToEdit.ferias_inicio ? userToEdit.ferias_inicio.split('T')[0] : '',
+        ferias_fim: userToEdit.ferias_fim ? userToEdit.ferias_fim.split('T')[0] : '',
+        tenant_id: activeTenant 
       });
       setEditingAuditData({
         id: userToEdit.id,
@@ -302,7 +312,7 @@ export default function Users() {
     } else if (selectedUsers.length > 1) {
       setModalMode('batch-edit'); setBatchToggles({ papel: false, status: false, endereco_cidade: false, endereco_estado: false }); 
       setFormData({ 
-        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', tenant_id: activeTenant 
+        nome: '', email: '', papel: 'PROFISSIONAL', senha: '', status: 'ATIVO', cpf: '', telefone: '', telefone_contato: '', endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '', endereco_cidade: '', endereco_estado: '', endereco_regiao: '', observacoes: '', dias_atendimento: [], ferias_inicio: '', ferias_fim: '', tenant_id: activeTenant 
       }); 
       setIsModalOpen(true);
     }
@@ -347,6 +357,9 @@ export default function Users() {
       const payload = { ...formData };
       if (modalMode === 'edit') delete payload.senha; 
       Object.keys(payload).forEach(key => { if (payload[key] === '') payload[key] = null; });
+      
+      if (payload.ferias_inicio) payload.ferias_inicio = new Date(`${payload.ferias_inicio}T00:00:00`).toISOString();
+      if (payload.ferias_fim) payload.ferias_fim = new Date(`${payload.ferias_fim}T23:59:59`).toISOString();
 
       if (modalMode === 'create') { 
         await api.post('/users/', payload); 
@@ -380,9 +393,6 @@ export default function Users() {
     } finally { setIsSaving(false); }
   };
 
-  // ---------------------------------------------------------
-  // 🔐 MOTOR DE RESET DE SENHA NO FRONTEND BLINDADO
-  // ---------------------------------------------------------
   const handleOpenResetPassword = () => {
     setResetPasswordValue('');
     setResetResult(null);
@@ -416,6 +426,13 @@ export default function Users() {
     } finally {
         setIsResetting(false);
     }
+  };
+
+  const toggleDiaAtendimento = (dia) => {
+      const novosDias = formData.dias_atendimento.includes(dia)
+          ? formData.dias_atendimento.filter(d => d !== dia)
+          : [...formData.dias_atendimento, dia].sort((a, b) => a - b);
+      setFormData({...formData, dias_atendimento: novosDias});
   };
 
   const filteredUsers = useMemo(() => {
@@ -486,7 +503,6 @@ export default function Users() {
       <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
         <Toaster position="top-right" />
 
-        {/* Modal da Agenda no Perfil */}
         <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Agenda: ${selectedHistoryUser?.nome}`}>
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -515,7 +531,6 @@ export default function Users() {
             </div>
         </Modal>
 
-        {/* MODAL MÁGICO DE RESET DE SENHA */}
         <Modal isOpen={isResetModalOpen} onClose={() => setIsResetModalOpen(false)} title="Reset de Senha de Acesso">
             <div className="flex flex-col gap-4">
                 {resetResult ? (
@@ -561,7 +576,6 @@ export default function Users() {
             </div>
         </Modal>
 
-        {/* Modal Principal de Criação/Edição */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Usuário" : modalMode === 'edit' ? "Editar Usuário" : "Edição em Lote"}>
           <form onSubmit={handleSaveUser} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
@@ -634,7 +648,46 @@ export default function Users() {
               </div>
             </fieldset>
 
-            {/* ABA DE SEGURANÇA E RESET DE SENHA SÓ APARECE NA EDIÇÃO */}
+            {formData.papel === 'PROFISSIONAL' && modalMode !== 'batch-edit' && (
+               <fieldset className="border border-indigo-200 p-4 rounded-xl bg-indigo-50/30 mt-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+                  <legend className="text-sm font-bold text-indigo-700 px-2 uppercase tracking-wider flex items-center gap-2"><Clock className="w-4 h-4" /> Disponibilidade e Férias</legend>
+                  
+                  <div className="mt-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Dias da semana em que atende</label>
+                      <div className="flex gap-2 flex-wrap">
+                          {diasSemanaNomes.map((dia, index) => {
+                              const isSelected = formData.dias_atendimento.includes(index);
+                              return (
+                                  <button 
+                                      type="button" 
+                                      key={index}
+                                      onClick={() => toggleDiaAtendimento(index)}
+                                      className={`w-12 h-10 rounded-lg font-bold text-xs transition-all shadow-sm ${isSelected ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border border-slate-300 hover:bg-slate-50'}`}
+                                  >
+                                      {dia}
+                                  </button>
+                              );
+                          })}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-wider">A agenda alertará caso tentem marcar fora destes dias.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-indigo-100">
+                      <div className="col-span-2">
+                          <label className="block text-sm font-bold text-slate-700 flex items-center gap-2 mb-2"><CalendarOff className="w-4 h-4 text-red-500"/> Bloqueio / Férias do Profissional</label>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">A partir de</label>
+                          <input type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={formData.ferias_inicio} onChange={e => setFormData({...formData, ferias_inicio: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Até o dia (Inclusivo)</label>
+                          <input type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={formData.ferias_fim} onChange={e => setFormData({...formData, ferias_fim: e.target.value})} />
+                      </div>
+                  </div>
+               </fieldset>
+            )}
+
             {modalMode === 'edit' && (
                <fieldset className="border border-red-200 p-4 rounded-xl bg-red-50/30 mt-4 shadow-sm">
                   <legend className="text-sm font-bold text-red-700 px-2 uppercase tracking-wider flex items-center gap-2"><Shield className="w-4 h-4" /> Segurança da Conta</legend>
@@ -681,7 +734,7 @@ export default function Users() {
 
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Usuários</h1>
-          <p className="text-gray-500 mt-1">Gestão de Usuários e Acessos.</p>
+          <p className="text-gray-500 mt-1">Gestão de Usuários, Acessos e Escala de Trabalho.</p>
         </div>
 
         <div className="flex flex-col">
@@ -765,6 +818,29 @@ export default function Users() {
                         if (col.id === 'nome') return <td key={col.id} className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{user.nome}</td>;
                         if (col.id === 'email') return <td key={col.id} className="px-6 py-4 text-gray-600 whitespace-nowrap">{user.email}</td>;
                         if (col.id === 'papel' || col.id === 'role') return <td key={col.id} className="px-6 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">{user.papel || user.role}</td>;
+                        
+                        // 👇 DRCODE: Renderização da nova coluna visual de Escala
+                        if (col.id === 'dias_atendimento') {
+                          return (
+                            <td key={col.id} className="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap">
+                                {user.papel === 'PROFISSIONAL' ? (
+                                    <div className="flex gap-1">
+                                        {user.dias_atendimento && user.dias_atendimento.length > 0 
+                                            ? user.dias_atendimento.map(d => (
+                                                <span key={d} className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-indigo-100 shadow-sm" title={diasSemanaNomes[d]}>
+                                                    {diasSemanaNomes[d]}
+                                                </span>
+                                            ))
+                                            : <span className="text-slate-400 italic">Não confg.</span>
+                                        }
+                                    </div>
+                                ) : (
+                                    <span className="text-slate-400">-</span>
+                                )}
+                            </td>
+                          );
+                        }
+
                         if (col.id === 'status') return (
                           <td key={col.id} className="px-6 py-4">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${user.status === 'ATIVO' ? 'bg-green-100 text-green-700 border border-green-200' : user.status === 'PENDENTE' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{user.status}</span>
@@ -794,8 +870,6 @@ export default function Users() {
         </div>
         
         <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 relative">
-          
-          {/* 👇 DRCODE: O componente visual de performance aqui! */}
           <PerformanceBadge metrics={perfMetrics} />
 
           <div className="flex items-center gap-6 ml-auto">

@@ -4,19 +4,22 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import Layout from '../components/Layout';
-import { Building2, Save, Loader2, ArrowLeft, MapPin, FileText, Lock } from 'lucide-react';
+// 👇 DRCODE: Adicionamos ícones sociais e o Globe (para o TikTok)
+import { Building2, Save, Loader2, ArrowLeft, MapPin, FileText, Lock, Facebook, Twitter, Instagram, Youtube, Globe, Share2 } from 'lucide-react';
 
 export default function CompanySettings() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isCheckingCEP, setIsCheckingCEP] = useState(false); // 👇 DRCODE: Estado para o loading do CEP
+  const [isCheckingCEP, setIsCheckingCEP] = useState(false);
   
   const [formData, setFormData] = useState({
     nome: '', nome_fantasia: '', cnpj: '', inscricao_estadual: '', inscricao_municipal: '',
     endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '',
-    endereco_cidade: '', endereco_estado: ''
+    endereco_cidade: '', endereco_estado: '',
+    // 👇 DRCODE: Inicializando os estados sociais
+    facebook_url: '', twitter_url: '', instagram_url: '', youtube_url: '', tiktok_url: ''
   });
 
   const [fullTenantData, setFullTenantData] = useState(null);
@@ -46,7 +49,13 @@ export default function CompanySettings() {
         endereco_numero: res.data.endereco_numero || '',
         endereco_bairro: res.data.endereco_bairro || '',
         endereco_cidade: res.data.endereco_cidade || '',
-        endereco_estado: res.data.endereco_estado || ''
+        endereco_estado: res.data.endereco_estado || '',
+        // 👇 DRCODE: Carregando as redes sociais se existirem
+        facebook_url: res.data.facebook_url || '',
+        twitter_url: res.data.twitter_url || '',
+        instagram_url: res.data.instagram_url || '',
+        youtube_url: res.data.youtube_url || '',
+        tiktok_url: res.data.tiktok_url || ''
       });
     } catch (err) {
       toast.error("Erro ao carregar os dados da empresa.");
@@ -55,7 +64,6 @@ export default function CompanySettings() {
     }
   };
 
-  // 👇 DRCODE: Função de busca do CEP restaurada e adaptada para a Empresa!
   const handleCEPLookup = async (cep) => {
     const cleanCEP = cep.replace(/\D/g, '');
     setFormData(prev => ({ ...prev, endereco_cep: cleanCEP }));
@@ -120,14 +128,14 @@ export default function CompanySettings() {
               <Building2 className="w-8 h-8 text-blue-600" /> 
               Dados da Empresa
             </h1>
-            <p className="text-slate-500 mt-1">Informações fiscais e de faturamento da sua clínica.</p>
+            <p className="text-slate-500 mt-1">Informações fiscais, faturamento e presença digital da clínica.</p>
           </div>
         </div>
 
         <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
           
           <div className="p-8 space-y-8">
-            {/* Seção Dados Fiscais */}
+            {/* Seção 1: Dados Fiscais */}
             <fieldset>
               <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
                 <FileText className="w-4 h-4 text-blue-600" /> Identificação e Dados Fiscais
@@ -158,7 +166,7 @@ export default function CompanySettings() {
               </div>
             </fieldset>
 
-            {/* Seção Endereço */}
+            {/* Seção 2: Endereço */}
             <fieldset>
               <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
                 <MapPin className="w-4 h-4 text-blue-600" /> Endereço de Faturamento
@@ -167,7 +175,6 @@ export default function CompanySettings() {
                 <div className="relative md:col-span-1">
                   <label className="block text-sm font-medium text-slate-700 mb-1">CEP</label>
                   <input className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="00000-000" value={formData.endereco_cep} onChange={e => handleCEPLookup(e.target.value)} />
-                  {/* 👇 DRCODE: Spinner de carregamento do CEP */}
                   {isCheckingCEP && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-9 text-blue-500" />}
                 </div>
                 <div className="md:col-span-2">
@@ -193,6 +200,63 @@ export default function CompanySettings() {
                 </div>
               </div>
             </fieldset>
+
+            {/* 👇 DRCODE: Seção 3: Redes Sociais */}
+            <fieldset>
+              <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
+                <Share2 className="w-4 h-4 text-blue-600" /> Presença Digital e Redes Sociais
+              </legend>
+              <p className="text-xs text-slate-500 mb-4">Adicione os links completos (ex: https://instagram.com/suaclinica). Eles poderão ser usados em recibos e portais de pacientes.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Facebook */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">Facebook</label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Facebook className="w-4 h-4 text-blue-600" /></span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil ou página" value={formData.facebook_url} onChange={e => setFormData({...formData, facebook_url: e.target.value})} />
+                  </div>
+                </div>
+
+                {/* Instagram */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">Instagram</label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Instagram className="w-4 h-4 text-pink-600" /></span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil" value={formData.instagram_url} onChange={e => setFormData({...formData, instagram_url: e.target.value})} />
+                  </div>
+                </div>
+
+                {/* Twitter / X */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">X (Twitter)</label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Twitter className="w-4 h-4 text-slate-800" /></span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil" value={formData.twitter_url} onChange={e => setFormData({...formData, twitter_url: e.target.value})} />
+                  </div>
+                </div>
+
+                {/* YouTube */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">YouTube</label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Youtube className="w-4 h-4 text-red-600" /></span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do canal" value={formData.youtube_url} onChange={e => setFormData({...formData, youtube_url: e.target.value})} />
+                  </div>
+                </div>
+
+                {/* TikTok */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">TikTok</label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Globe className="w-4 h-4 text-slate-900" /></span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil" value={formData.tiktok_url} onChange={e => setFormData({...formData, tiktok_url: e.target.value})} />
+                  </div>
+                </div>
+
+              </div>
+            </fieldset>
+
           </div>
 
           <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-end">
