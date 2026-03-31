@@ -2,22 +2,17 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import Layout from '../components/Layout';
-import { Mail, MessageSquare, Smartphone, Save, Loader2, Info, Server, Key, User, QrCode } from 'lucide-react';
+import { Mail, MessageSquare, Smartphone, Save, Loader2, Info, Server, Key, User } from 'lucide-react';
 
 export default function IntegrationSettings() {
   const [activeTab, setActiveTab] = useState('smtp');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Estados dos formulários
+  // Estados dos formulários (serão convertidos para JSON)
   const [smtpConfig, setSmtpConfig] = useState({ host: '', port: '587', user: '', password: '', from_email: '', from_name: 'ServiceSched', use_tls: true });
   const [wppConfig, setWppConfig] = useState({ api_url: '', api_key: '', instance_name: '' });
   const [tgConfig, setTgConfig] = useState({ bot_token: '' });
-
-  // Estados do WhatsAppConnect
-  const [qrCode, setQrCode] = useState("");
-  const [qrStatus, setQrStatus] = useState("Aguardando ação...");
-  const [isFetchingQR, setIsFetchingQR] = useState(false);
 
   const fetchConfigs = async () => {
     setIsLoading(true);
@@ -61,42 +56,6 @@ export default function IntegrationSettings() {
     }
   };
 
-  // Função de busca do QR Code embutida
-  const fetchQRCode = async () => {
-    setIsFetchingQR(true);
-    setQrStatus("Buscando QR Code...");
-    try {
-      // Usa os dados do input ou faz o fallback seguro para o padrão caso estejam vazios
-      const apiUrl = wppConfig.api_url || `http://${window.location.hostname}:48080`;
-      const instanceName = wppConfig.instance_name || "empresa_matriz";
-      const apiKey = wppConfig.api_key || "medsched_global_secret_key";
-
-      const response = await fetch(`${apiUrl}/instance/connect/${instanceName}`, {
-        method: 'GET',
-        headers: {
-          'apikey': apiKey
-        }
-      });
-      
-      const data = await response.json();
-      
-      if (data.base64) {
-        setQrCode(data.base64);
-        setQrStatus("QR Code gerado! Aponte o celular.");
-      } else if (data.instance?.state === "open") {
-        setQrStatus("✅ WhatsApp já está conectado!");
-        setQrCode("");
-      } else {
-        setQrStatus("Erro ao ler status. Verifique as credenciais.");
-      }
-    } catch (error) {
-      console.error(error);
-      setQrStatus("❌ Erro de conexão. Verifique se a API está rodando.");
-    } finally {
-      setIsFetchingQR(false);
-    }
-  };
-
   return (
     <Layout>
       <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6">
@@ -131,7 +90,7 @@ export default function IntegrationSettings() {
                 <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-start gap-3">
                   <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-blue-800">
-                    Insira as credenciais do seu servidor SMTP (SendGrid, Mailgun, Amazon SES, Locaweb, etc). É através desta conta que seus clientes receberão os avisos.
+                    Insira as credenciais do seu servidor SMTP (SendGrid, Mailgun, Amazon SES, Locaweb, etc). É através desta conta que seus clientes receberão os lembretes.
                   </p>
                 </div>
 
@@ -160,11 +119,11 @@ export default function IntegrationSettings() {
                 <div className="border-t border-slate-100 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">E-mail do Remetente (From)</label>
-                    <input type="email" placeholder="contato@suaempresa.com" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={smtpConfig.from_email} onChange={e => setSmtpConfig({...smtpConfig, from_email: e.target.value})} />
+                    <input type="email" placeholder="contato@suaclinica.com" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={smtpConfig.from_email} onChange={e => setSmtpConfig({...smtpConfig, from_email: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Remetente</label>
-                    <input type="text" placeholder="Empresa Exemplo" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={smtpConfig.from_name} onChange={e => setSmtpConfig({...smtpConfig, from_name: e.target.value})} />
+                    <input type="text" placeholder="Clínica Exemplo" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={smtpConfig.from_name} onChange={e => setSmtpConfig({...smtpConfig, from_name: e.target.value})} />
                   </div>
                 </div>
 
@@ -176,67 +135,33 @@ export default function IntegrationSettings() {
               </div>
             )}
 
-            {/* ABA WHATSAPP (AGORA COM O QR CODE INTEGRADO) */}
+            {/* ABA WHATSAPP */}
             {activeTab === 'whatsapp' && (
               <div className="p-6 flex flex-col gap-6">
-                <div className="bg-green-50 border border-green-200 p-4 rounded-lg flex items-start gap-3">
+                 <div className="bg-green-50 border border-green-200 p-4 rounded-lg flex items-start gap-3">
                   <Info className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-green-800">
-                    Integração via API (Ex: Evolution API, Z-API). Insira as credenciais primeiro, salve, e depois gere o QR Code para conectar o número da empresa.
+                    Integração via API (Ex: Evolution API, Z-API, W-API). Insira a URL do seu provedor e o token de acesso.
                   </p>
                 </div>
                 
-                {/* DADOS DA API */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Base URL da API</label>
-                      <input type="url" placeholder={`http://${window.location.hostname}:48080`} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={wppConfig.api_url} onChange={e => setWppConfig({...wppConfig, api_url: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Nome da Instância</label>
-                      <input type="text" placeholder="empresa_matriz" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={wppConfig.instance_name} onChange={e => setWppConfig({...wppConfig, instance_name: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Token de Acesso (API Key)</label>
-                      <input type="password" placeholder="••••••••••••" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={wppConfig.api_key} onChange={e => setWppConfig({...wppConfig, api_key: e.target.value})} />
-                    </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Base URL da API</label>
+                  <input type="url" placeholder="https://api.seuservidor.com/v1/" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={wppConfig.api_url} onChange={e => setWppConfig({...wppConfig, api_url: e.target.value})} />
                 </div>
-
-                <div className="flex justify-end pt-2 border-b border-slate-100 pb-6">
-                  <button onClick={() => handleSave('whatsapp')} disabled={isSaving} className="bg-white border border-green-600 text-green-600 hover:bg-green-50 px-6 py-2.5 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all">
-                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar Credenciais
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Nome da Instância / ID da Conexão</label>
+                  <input type="text" placeholder="ex: clinica_matriz" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={wppConfig.instance_name} onChange={e => setWppConfig({...wppConfig, instance_name: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Global API Key / Token de Acesso</label>
+                  <input type="password" placeholder="••••••••••••" className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={wppConfig.api_key} onChange={e => setWppConfig({...wppConfig, api_key: e.target.value})} />
+                </div>
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <button onClick={() => handleSave('whatsapp')} disabled={isSaving} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all">
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar Integração WhatsApp
                   </button>
                 </div>
-
-                {/* PAINEL DE CONEXÃO DO QR CODE */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
-                   <div className="flex items-center justify-between mb-4">
-                       <div>
-                           <h3 className="text-lg font-bold text-slate-800">Conexão do Aparelho</h3>
-                           <p className="text-sm text-slate-500">Leia o QR code com o WhatsApp do número oficial da empresa.</p>
-                       </div>
-                       <button 
-                         onClick={fetchQRCode}
-                         disabled={isFetchingQR}
-                         className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg font-bold shadow flex items-center gap-2 transition-all disabled:bg-slate-400"
-                       >
-                         {isFetchingQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
-                         Gerar QR Code
-                       </button>
-                   </div>
-
-                   <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 rounded-lg bg-white min-h-[300px]">
-                     {qrCode ? (
-                       <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64 object-contain animate-in zoom-in-95" />
-                     ) : (
-                       <div className="text-slate-400 flex flex-col items-center text-center">
-                         <MessageSquare className="w-12 h-12 mb-3 text-slate-300" />
-                         <p className="font-bold text-slate-600">{qrStatus}</p>
-                       </div>
-                     )}
-                   </div>
-                </div>
-
               </div>
             )}
 

@@ -4,7 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import { Toaster, toast } from 'react-hot-toast';
 import Modal from '../components/Modal';
 import Layout from '../components/Layout';
-import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Novo componente importado
+import PerformanceBadge from '../components/PerformanceBadge'; 
 import { 
   UserPlus, Mail, Shield, UserCheck, Loader2, AlertCircle, 
   Search, Download, Edit2, Trash2, Settings2, UploadCloud, Clock, Save, UserX, Filter, Plus, X, Layers, Activity, ChevronLeft, ChevronRight, Info, CalendarDays, Lock, MapPin, ChevronUp, ChevronDown, MessageSquare, CheckCircle2, XCircle
@@ -74,7 +74,7 @@ export default function Customers() {
   const [historyFilters, setHistoryFilters] = useState({ dataInicio: '', dataFim: '' });
   const [isCheckingCEP, setIsCheckingCEP] = useState(false);
 
-  // 👇 DRCODE: ESTADOS DO NOVO MODAL DE COMUNICAÇÃO (MENSAGERIA)
+  // ESTADOS DO NOVO MODAL DE COMUNICAÇÃO (MENSAGERIA)
   const [isCommModalOpen, setIsCommModalOpen] = useState(false);
   const [customerComms, setCustomerComms] = useState([]);
   const [isCommLoading, setIsCommLoading] = useState(false);
@@ -247,7 +247,7 @@ export default function Customers() {
     }
   };
 
-  // 👇 DRCODE: FUNÇÕES DO HISTÓRICO DE COMUNICAÇÃO (MENSAGERIA)
+  // FUNÇÕES DO HISTÓRICO DE COMUNICAÇÃO (MENSAGERIA)
   const openCommModal = async (customer) => {
     setSelectedHistoryCustomer(customer);
     setIsCommModalOpen(true);
@@ -523,7 +523,7 @@ export default function Customers() {
           </div>
         </Modal>
 
-        {/* 👇 DRCODE: NOVO MODAL DE HISTÓRICO DE COMUNICAÇÃO */}
+        {/* MODAL DE HISTÓRICO DE COMUNICAÇÃO */}
         <Modal isOpen={isCommModalOpen} onClose={() => setIsCommModalOpen(false)} title={`Comunicações: ${selectedHistoryCustomer?.nome}`}>
           <div className="flex flex-col gap-4">
             <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-start gap-2">
@@ -581,7 +581,7 @@ export default function Customers() {
           </div>
         </Modal>
 
-        {/* MODAL DE CRIAÇÃO/EDIÇÃO DE CLIENTE (MANTIDO) */}
+        {/* MODAL DE CRIAÇÃO/EDIÇÃO DE CLIENTE */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Novo Cliente" : modalMode === 'edit' ? "Editar Cliente" : "Edição em Lote"}>
           <form onSubmit={handleSaveCustomer} className="space-y-6 max-h-[75vh] overflow-y-auto px-1 pb-2">
             
@@ -760,15 +760,14 @@ export default function Customers() {
               </div>
 
               <button onClick={handleExportCSV} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600" title="Exportar CSV"><Download className="w-5 h-5" /></button>
-              <div className="relative">
-                <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium shadow-sm"><UserPlus className="w-5 h-5" /> Adicionar</button>
-                {showAddMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
-                    <button onClick={handleOpenCreate} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"><UserPlus className="w-4 h-4 mr-2 text-blue-600" /> Novo Cliente</button>
-                    <button onClick={() => setShowAddMenu(false)} className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"><UploadCloud className="w-4 h-4 mr-2 text-blue-600" /> Importar de CSV</button>
-                  </div>
-                )}
-              </div>
+              
+              {/* 👇 DRCODE: BOTÃO NOVO CLIENTE SIMPLIFICADO */}
+              <button 
+                onClick={handleOpenCreate} 
+                className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-bold shadow-sm transition-all"
+              >
+                <UserPlus className="w-5 h-5" /> Novo Cliente
+              </button>
             </div>
           </div>
 
@@ -844,7 +843,6 @@ export default function Customers() {
                     <tr key={user.id} className={`hover:bg-blue-50/50 transition-colors group ${selectedCustomers.includes(user.id) ? 'bg-blue-50' : ''}`}>
                       <td className="px-6 py-4"><input type="checkbox" checked={selectedCustomers.includes(user.id)} onChange={() => setSelectedCustomers(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id])} /></td>
                       
-                      {/* 👇 DRCODE: NOVO BOTÃO DE MENSAGENS NA COLUNA DE AÇÕES */}
                       <td className="px-2 py-4 text-center flex justify-center gap-1">
                           <button onClick={() => openHistoryModal(user)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all border border-transparent shadow-sm hover:border-blue-200" title="Ver Histórico de Agendamentos">
                               <CalendarDays className="w-4 h-4" />
@@ -884,7 +882,6 @@ export default function Customers() {
         
         <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 relative">
           
-          {/* 👇 DRCODE: Usando o novo componente de Performance */}
           <PerformanceBadge metrics={perfMetrics} />
 
           <div className="flex items-center gap-6">

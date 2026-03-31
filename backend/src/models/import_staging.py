@@ -14,6 +14,7 @@ class ImportEntityType(str, enum.Enum):
     PROFESSIONAL = "professional"
     SERVICE = "service"
     RESOURCE = "resource"
+    HOLIDAY = "holiday" # 👇 DRCODE: Nova entidade de Feriados
 
 class ImportBatchStatus(str, enum.Enum):
     PENDING = "pending"              # Arquivo recebido
@@ -39,7 +40,6 @@ class ImportBatch(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    # Corrigido: Usando comment= ao invés de description=
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, comment="Quem fez o upload")
     
     entity_type = Column(Enum(ImportEntityType), nullable=False)
@@ -59,7 +59,6 @@ class ImportRow(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     batch_id = Column(UUID(as_uuid=True), ForeignKey("import_batches.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    # Corrigidos os campos com comment=
     row_number = Column(Integer, nullable=False, comment="Numero da linha no arquivo original")
     raw_data = Column(JSONB, nullable=False, comment="Os dados exatos que vieram na linha")
     status = Column(Enum(ImportRowStatus), default=ImportRowStatus.PENDING, nullable=False)

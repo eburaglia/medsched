@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-# 👇 DRCODE NOVO: Adicionamos o 'waitlist' no final desta linha de importação
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance, billing, waitlist, notification, integration
+
+# Importa o modelo para o SQLAlchemy saber que precisa criar a tabela no banco
+from src.models.holiday import Holiday 
+
+# 👇 DRCODE: Adicionado o 'holiday' na importação
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance, billing, waitlist, notification, integration, holiday
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -40,76 +44,32 @@ app.include_router(
     tags=["Tenants (Clínicas e Empresas)"]
 )
 
-app.include_router(
-    user.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    auth.router,
-    prefix="/api/v1/auth",
-    tags=["Autenticação"]
-)
-
-app.include_router(
-    customer.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    appointment.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    service.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    resource.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    import_data.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    service_record.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    utils.router,
-    prefix="/api/v1"
-)
-
-app.include_router(
-    dashboard.router,
-    prefix="/api/v1"
-)
+app.include_router(user.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Autenticação"])
+app.include_router(customer.router, prefix="/api/v1")
+app.include_router(appointment.router, prefix="/api/v1")
+app.include_router(service.router, prefix="/api/v1")
+app.include_router(resource.router, prefix="/api/v1")
+app.include_router(import_data.router, prefix="/api/v1")
+app.include_router(service_record.router, prefix="/api/v1")
+app.include_router(utils.router, prefix="/api/v1")
+app.include_router(dashboard.router, prefix="/api/v1")
 
 # O NOVO MOTOR FINANCEIRO E DE COMISSIONAMENTO
-app.include_router(
-    finance.router,
-    prefix="/api/v1/finance",
-    tags=["Financeiro e Caixa"]
-)
+app.include_router(finance.router, prefix="/api/v1/finance", tags=["Financeiro e Caixa"])
 
 # MOTOR DE REGRAS DE COBRANÇA E PARCERIAS
-app.include_router(
-    billing.router,
-    prefix="/api/v1/billing",
-    tags=["Faturamento e Parcerias"]
-)
+app.include_router(billing.router, prefix="/api/v1/billing", tags=["Faturamento e Parcerias"])
 
-# 👇 DRCODE NOVO: O Roteador da Fila de Espera!
-app.include_router(
-    waitlist.router,
-    prefix="/api/v1/waitlists",
-    tags=["Fila de Espera"]
-)
+# O Roteador da Fila de Espera
+app.include_router(waitlist.router, prefix="/api/v1/waitlists", tags=["Fila de Espera"])
+
 app.include_router(notification.router, prefix="/api/v1")
 app.include_router(integration.router, prefix="/api/v1")
+
+# 👇 DRCODE: NOVO Roteador de Feriados
+app.include_router(
+    holiday.router, 
+    prefix="/api/v1/holidays", 
+    tags=["Feriados e Expediente"]
+)

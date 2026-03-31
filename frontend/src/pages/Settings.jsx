@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import Layout from '../components/Layout';
-import PerformanceBadge from '../components/PerformanceBadge'; // 👇 Importamos o componente
-import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug } from 'lucide-react';
+import PerformanceBadge from '../components/PerformanceBadge';
+// 👇 DRCODE: Database adicionado à lista de ícones!
+import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug, CalendarDays, Database } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -94,7 +95,13 @@ export default function Settings() {
       path: "/configuracoes/faturamento",
       active: true
     },
-    // 👇 DRCODE: Novo Botão de Templates de Notificação
+    {
+      title: "Feriados e Expediente",
+      description: "Gerencie feriados e defina se a empresa abrirá ou não nestas datas.",
+      icon: <CalendarDays className="w-6 h-6" />,
+      path: "/configuracoes/feriados",
+      active: true
+    },
     {
       title: "Mensageria e Templates",
       description: "Configure os textos de e-mail, WhatsApp e avisos automáticos do sistema.",
@@ -102,12 +109,19 @@ export default function Settings() {
       path: "/configuracoes/notificacoes",
       active: true
     },
-    // 👇 DRCODE: Novo Botão de Integrações
     {
       title: "Integrações Externas",
       description: "Conecte seu servidor de E-mail (SMTP), API do WhatsApp e Bot do Telegram.",
       icon: <Plug className="w-6 h-6" />,
       path: "/configuracoes/integracoes",
+      active: true
+    },
+    // 👇 DRCODE: Adicionado o novo módulo de importação
+    {
+      title: "DataLoad Management",
+      description: "Importação em lote de clientes, feriados e serviços via planilha CSV/Excel.",
+      icon: <Database className="w-6 h-6" />,
+      path: "/configuracoes/dataload",
       active: true
     },
     {
@@ -166,7 +180,7 @@ export default function Settings() {
           <div className="flex flex-col md:flex-row gap-8 items-start md:items-center">
             <div className="flex-1">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Cor Principal do Sistema</label>
-              <p className="text-sm text-gray-500 mb-4">Esta cor será aplicada no menu lateral e nos botões de destaque para customizar o ambiente com a marca da sua clínica.</p>
+              <p className="text-sm text-gray-500 mb-4">Esta cor será aplicada no menu lateral e nos botões de destaque para customizar o ambiente com a marca da sua empresa.</p>
               
               <div className="flex items-center gap-4">
                 <input
@@ -192,7 +206,6 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* 👇 DRCODE: Nosso novo componente de performance adicionado no rodapé */}
         <div className="flex justify-between items-center text-xs text-gray-500 pt-2 pb-8 border-t border-gray-200 mt-4">
           <PerformanceBadge metrics={perfMetrics} />
         </div>
