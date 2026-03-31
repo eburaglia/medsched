@@ -4,8 +4,8 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import Layout from '../components/Layout';
 import PerformanceBadge from '../components/PerformanceBadge';
-// 👇 DRCODE: Database adicionado à lista de ícones!
-import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug, CalendarDays, Database } from 'lucide-react';
+// 👇 DRCODE: Building2 adicionado à lista de ícones!
+import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug, CalendarDays, Database, Building2 } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -88,6 +88,14 @@ export default function Settings() {
   };
 
   const menuItems = [
+    // 👇 DRCODE: Novo card de Dados da Empresa
+    {
+      title: "Dados da Empresa",
+      description: "Informações fiscais, CNPJ, Inscrição Estadual e Endereço.",
+      icon: <Building2 className="w-6 h-6" />,
+      path: "/configuracoes/empresa",
+      active: true
+    },
     {
       title: "Regras de Faturamento",
       description: "Taxas de maquininhas, bancos e gestão de convênios/parcerias.",
@@ -116,7 +124,6 @@ export default function Settings() {
       path: "/configuracoes/integracoes",
       active: true
     },
-    // 👇 DRCODE: Adicionado o novo módulo de importação
     {
       title: "DataLoad Management",
       description: "Importação em lote de clientes, feriados e serviços via planilha CSV/Excel.",

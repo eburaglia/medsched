@@ -23,8 +23,11 @@ import NotificationTemplates from './pages/NotificationTemplates';
 // Importando a página de Conexão do WhatsApp
 import WhatsAppConnect from './pages/WhatsAppConnect';
 
-// 👇 NOVO: Importando a página do Módulo de Importação (DataLoad)
+// Importando a página do Módulo de Importação (DataLoad)
 import DataLoad from './pages/DataLoad';
+
+// 👇 DRCODE: Importando a página de Dados Fiscais da Empresa
+import CompanySettings from './pages/CompanySettings';
 
 // Importando o nosso guarda-costas de rotas
 import ProtectedRoute from './components/ProtectedRoute';
@@ -94,6 +97,13 @@ function App() {
             <Settings />
           </ProtectedRoute>
         } />
+        
+        {/* 👇 NOVO: Rota para o painel de Dados da Empresa */}
+        <Route path="/configuracoes/empresa" element={
+          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <CompanySettings />
+          </ProtectedRoute>
+        } />
 
         <Route path="/configuracoes/faturamento" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN']}>
@@ -126,14 +136,14 @@ function App() {
             <WhatsAppConnect />
           </ProtectedRoute>
         } />
-	
+
         <Route path="/configuracoes/feriados" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR']}>
             <Holidays />
           </ProtectedRoute>
         } />
 
-        {/* 👇 NOVO: Rota para o painel de DataLoad (Importação) */}
+        {/* Rota para o painel de DataLoad (Importação) */}
         <Route path="/configuracoes/dataload" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR']}>
             <DataLoad />

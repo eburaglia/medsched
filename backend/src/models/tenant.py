@@ -18,6 +18,10 @@ class Tenant(AuditoriaMixin, Base):
     nome = Column(String(255), nullable=False)
     nome_fantasia = Column(String(255), nullable=True)
     cnpj = Column(String(20), unique=True, index=True, nullable=True)
+    # 👇 DRCODE: Nossas duas novas colunas fiscais
+    inscricao_estadual = Column(String(50), nullable=True)
+    inscricao_municipal = Column(String(50), nullable=True)
+    
     segmento_atuacao = Column(String(100), nullable=False)
     fuso_horario = Column(String(50), nullable=False)
 
@@ -38,7 +42,6 @@ class Tenant(AuditoriaMixin, Base):
     url_externa = Column(String(255), nullable=False)
     logotipo_url = Column(String(500), nullable=False)
 
-    # Configurações de Identidade Visual (Cores, fontes, etc)
     configuracoes_visuais = Column(JSON, nullable=True, default=dict)
 
     validade_assinatura = Column(DateTime, nullable=False)
