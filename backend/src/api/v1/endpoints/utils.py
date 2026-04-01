@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import urllib.request
 import json
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from src.database import get_db
 
 router = APIRouter(prefix="/utils", tags=["Utilidades Gerais"])
 
@@ -29,3 +32,22 @@ def buscar_cep(cep: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Falha ao consultar o serviço de CEP: {str(e)}")
+
+# 👇 DRCODE: Nova rota dinâmica que lê as categorias do Banco de Dados
+@router.get("/categorias")
+def listar_categorias(db: Session = Depends(get_db)):
+    try:
+        # Busca todas as categorias ordenadas
+        result = db.execute(text("SELECT macro, micro FROM system_categories ORDER BY macro, micro")).fetchall()
+        
+        categorias = {}
+        for row in result:
+            macro = row.macro
+            micro = row.micro
+            if macro not in categorias:
+                categorias[macro] = []
+            categorias[macro].append(micro)
+            
+        return categorias
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar categorias: {str(e)}")

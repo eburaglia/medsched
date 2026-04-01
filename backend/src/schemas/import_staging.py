@@ -5,8 +5,6 @@ from uuid import UUID
 
 from src.models.import_staging import ImportEntityType, ImportBatchStatus, ImportRowStatus
 
-# --- SCHEMAS PARA O LOTE (BATCH) ---
-
 class ImportBatchBase(BaseModel):
     entity_type: ImportEntityType
     file_name: str
@@ -19,17 +17,21 @@ class ImportBatchCreate(ImportBatchBase):
 class ImportBatchResponse(ImportBatchBase):
     id: UUID
     status: ImportBatchStatus
+    
+    # 👇 DRCODE: Campos essenciais para habilitar os botões na tela
+    total_rows: int = 0
+    valid_rows: int = 0
+    error_rows: int = 0
+    error_message: Optional[str] = None
+    
     criado_em: datetime
     alterado_em: datetime
     model_config = ConfigDict(from_attributes=True)
 
-
-# --- SCHEMAS PARA AS LINHAS (ROWS) ---
-
 class ImportRowBase(BaseModel):
     batch_id: UUID
     row_number: int
-    raw_data: Dict[str, Any]  # O dicionário genérico que vai para o JSONB
+    raw_data: Dict[str, Any]
 
 class ImportRowCreate(ImportRowBase):
     pass

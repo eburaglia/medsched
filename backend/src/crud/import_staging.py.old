@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import cast, String, func
+from sqlalchemy import cast, String, func  # 👇 DRCODE: Importado para forçar a busca exata
 from uuid import UUID
 from pydantic import ValidationError
 from typing import List, Dict, Any
@@ -68,9 +68,7 @@ def get_batch(db: Session, batch_id: UUID, tenant_id: UUID):
 # ==========================================
 def validate_import_batch(db: Session, batch_id: UUID, tenant_id: UUID):
     batch = get_batch(db, batch_id, tenant_id)
-    
-    # 👇 DRCODE: O segurança agora permite revalidar lotes que estavam como PENDING ou FAILED!
-    if not batch or batch.status not in [ImportBatchStatus.PENDING, ImportBatchStatus.FAILED]:
+    if not batch or batch.status != ImportBatchStatus.PENDING:
         return False
 
     batch.status = ImportBatchStatus.PROCESSING
@@ -101,6 +99,7 @@ def validate_import_batch(db: Session, batch_id: UUID, tenant_id: UUID):
             try:
                 cust_in = CustomerCreate(**normalized_data)
                 
+                # 👇 DRCODE: Busca blindada por e-mail ignorando maiúsculas
                 email_busca = str(cust_in.email).strip().lower()
                 if db.query(Customer).filter(Customer.tenant_id == tenant_id, func.lower(Customer.email) == email_busca).first():
                     row.status = ImportRowStatus.DUPLICATED
@@ -137,7 +136,8 @@ def validate_import_batch(db: Session, batch_id: UUID, tenant_id: UUID):
             try:
                 hol_in = HolidayCreate(**normalized_data)
                 
-                data_busca = str(hol_in.data)[:10] 
+                # 👇 DRCODE: Busca blindada ignorando horas invisíveis na base de dados
+                data_busca = str(hol_in.data)[:10] # Pega estritamente o YYYY-MM-DD
                 feriado_existente = db.query(Holiday).filter(
                     Holiday.tenant_id == tenant_id,
                     cast(Holiday.data, String).like(f"{data_busca}%")
@@ -225,10 +225,11 @@ def validate_import_batch(db: Session, batch_id: UUID, tenant_id: UUID):
     batch.valid_rows = valid_count
     batch.error_rows = error_count
     
-    if error_count > 0:
-        batch.status = ImportBatchStatus.FAILED
-    else:
-        batch.status = ImportBatchStatus.VALIDATED
+    # 👇 DRCODE: Se houver qualquer erro, trava o botão de Promover e libera o Editar na UI
+    #if error_count > 0:
+    #    batch.status = ImportBatchStatus.PENDING
+    #else:
+    batch.status = ImportBatchStatus.VALIDATED
         
     db.commit()
     

@@ -3,9 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Importa o modelo para o SQLAlchemy saber que precisa criar a tabela no banco
 from src.models.holiday import Holiday 
+from src.models.supplier import Supplier # 👇 DRCODE: Adicionado o Supplier
 
-# 👇 DRCODE: Adicionado o 'holiday' na importação
-from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance, billing, waitlist, notification, integration, holiday
+# 👇 DRCODE: Adicionado o 'suppliers' na importação no final da linha
+from src.api.v1.endpoints import tenants, user, auth, customer, appointment, service, resource, import_data, service_record, utils, dashboard, finance, billing, waitlist, notification, integration, holiday, suppliers
 
 # Inicializa o cérebro da nossa API
 app = FastAPI(
@@ -67,9 +68,15 @@ app.include_router(waitlist.router, prefix="/api/v1/waitlists", tags=["Fila de E
 app.include_router(notification.router, prefix="/api/v1")
 app.include_router(integration.router, prefix="/api/v1")
 
-# 👇 DRCODE: NOVO Roteador de Feriados
+# Roteador de Feriados
 app.include_router(
     holiday.router, 
     prefix="/api/v1/holidays", 
     tags=["Feriados e Expediente"]
+)
+
+# 👇 DRCODE: NOVO Roteador de Fornecedores
+app.include_router(
+    suppliers.router, 
+    prefix="/api/v1"
 )

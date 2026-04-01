@@ -1,0 +1,12 @@
+#Logar no banco
+docker exec -it medsched-db psql -U medsched_admin -d medsched_db
+
+
+#Atualizar o git
+cd /opt/medsched
+git add .
+git commit -m "implementado: "
+git push
+
+#Capturar log da api pelo docker
+docker logs medsched-api --tail 20

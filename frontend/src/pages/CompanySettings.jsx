@@ -4,8 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import { Toaster, toast } from 'react-hot-toast';
 import Layout from '../components/Layout';
-// 👇 DRCODE: Adicionamos ícones sociais e o Globe (para o TikTok)
-import { Building2, Save, Loader2, ArrowLeft, MapPin, FileText, Lock, Facebook, Twitter, Instagram, Youtube, Globe, Share2 } from 'lucide-react';
+import { Building2, Save, Loader2, ArrowLeft, MapPin, FileText, Lock, Facebook, Twitter, Instagram, Youtube, Globe, Share2, Layers } from 'lucide-react';
 
 export default function CompanySettings() {
   const navigate = useNavigate();
@@ -14,12 +13,15 @@ export default function CompanySettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCheckingCEP, setIsCheckingCEP] = useState(false);
   
+  const [categoriasSistema, setCategoriasSistema] = useState({});
+  
   const [formData, setFormData] = useState({
     nome: '', nome_fantasia: '', cnpj: '', inscricao_estadual: '', inscricao_municipal: '',
+    categoria_principal: '', subcategoria: '',
     endereco_cep: '', endereco_logradouro: '', endereco_numero: '', endereco_bairro: '',
     endereco_cidade: '', endereco_estado: '',
-    // 👇 DRCODE: Inicializando os estados sociais
-    facebook_url: '', twitter_url: '', instagram_url: '', youtube_url: '', tiktok_url: ''
+    // 👇 DRCODE: Agora usamos "handle" (o @usuario) no frontend em vez da URL inteira
+    facebook_handle: '', twitter_handle: '', instagram_handle: '', youtube_handle: '', tiktok_handle: ''
   });
 
   const [fullTenantData, setFullTenantData] = useState(null);
@@ -30,9 +32,32 @@ export default function CompanySettings() {
       const decoded = jwtDecode(token);
       const tId = decoded.tenant_id;
       setTenantId(tId);
+      fetchCategorias();
       fetchTenantData(tId);
     }
   }, []);
+
+  const fetchCategorias = async () => {
+    try {
+      const res = await api.get('/utils/categorias');
+      setCategoriasSistema(res.data);
+    } catch (err) {
+      console.error("Erro ao carregar categorias do sistema:", err);
+      toast.error("Erro ao carregar lista de categorias.");
+    }
+  };
+
+  // 👇 DRCODE: Função Ninja para recortar só o nome de usuário da URL que vem do banco
+  const extractHandle = (url, domains) => {
+    if (!url) return '';
+    let handle = url;
+    domains.forEach(domain => {
+      if (url.includes(domain)) {
+        handle = url.split(domain)[1].replace(/^\//, ''); // Pega tudo depois do domínio e remove a barra inicial
+      }
+    });
+    return handle;
+  };
 
   const fetchTenantData = async (id) => {
     try {
@@ -44,18 +69,20 @@ export default function CompanySettings() {
         cnpj: res.data.cnpj || '',
         inscricao_estadual: res.data.inscricao_estadual || '',
         inscricao_municipal: res.data.inscricao_municipal || '',
+        categoria_principal: res.data.categoria_principal || '',
+        subcategoria: res.data.subcategoria || '',
         endereco_cep: res.data.endereco_cep || '',
         endereco_logradouro: res.data.endereco_logradouro || '',
         endereco_numero: res.data.endereco_numero || '',
         endereco_bairro: res.data.endereco_bairro || '',
         endereco_cidade: res.data.endereco_cidade || '',
         endereco_estado: res.data.endereco_estado || '',
-        // 👇 DRCODE: Carregando as redes sociais se existirem
-        facebook_url: res.data.facebook_url || '',
-        twitter_url: res.data.twitter_url || '',
-        instagram_url: res.data.instagram_url || '',
-        youtube_url: res.data.youtube_url || '',
-        tiktok_url: res.data.tiktok_url || ''
+        // Extraindo os nomes de usuário limpos
+        facebook_handle: extractHandle(res.data.facebook_url, ['facebook.com']),
+        twitter_handle: extractHandle(res.data.twitter_url, ['x.com', 'twitter.com']),
+        instagram_handle: extractHandle(res.data.instagram_url, ['instagram.com']),
+        youtube_handle: extractHandle(res.data.youtube_url, ['youtube.com/@', 'youtube.com/c/', 'youtube.com']),
+        tiktok_handle: extractHandle(res.data.tiktok_url, ['tiktok.com/@', 'tiktok.com'])
       });
     } catch (err) {
       toast.error("Erro ao carregar os dados da empresa.");
@@ -89,12 +116,38 @@ export default function CompanySettings() {
     }
   };
 
+  // 👇 DRCODE: Função Ninja para montar a URL completa antes de mandar pro banco
+  const buildUrl = (handle, base) => {
+    if (!handle) return null;
+    let clean = handle.trim().replace(/^@/, ''); // Remove o @ se o usuário digitou sem querer
+    if (clean.startsWith('http')) return clean; // Se o cara colou a URL inteira por teimosia, aceitamos
+    return `${base}${clean}`;
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     const loadingToast = toast.loading("Salvando dados...");
+    
     try {
-      const payload = { ...fullTenantData, ...formData };
+      const payload = { 
+        ...fullTenantData, 
+        ...formData,
+        // Montando as URLs completas para salvar
+        facebook_url: buildUrl(formData.facebook_handle, 'https://facebook.com/'),
+        twitter_url: buildUrl(formData.twitter_handle, 'https://x.com/'),
+        instagram_url: buildUrl(formData.instagram_handle, 'https://instagram.com/'),
+        youtube_url: buildUrl(formData.youtube_handle, 'https://youtube.com/@'),
+        tiktok_url: buildUrl(formData.tiktok_handle, 'https://tiktok.com/@')
+      };
+
+      // Limpando os "handles" para não mandar lixo pro backend
+      delete payload.facebook_handle;
+      delete payload.twitter_handle;
+      delete payload.instagram_handle;
+      delete payload.youtube_handle;
+      delete payload.tiktok_handle;
+
       await api.put(`/tenants/${tenantId}`, payload);
       toast.success("Dados da empresa atualizados com sucesso!", { id: loadingToast });
     } catch (err) {
@@ -114,6 +167,10 @@ export default function CompanySettings() {
     );
   }
 
+  const subcategoriasDisponiveis = formData.categoria_principal 
+    ? categoriasSistema[formData.categoria_principal] || [] 
+    : [];
+
   return (
     <Layout>
       <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4">
@@ -128,14 +185,14 @@ export default function CompanySettings() {
               <Building2 className="w-8 h-8 text-blue-600" /> 
               Dados da Empresa
             </h1>
-            <p className="text-slate-500 mt-1">Informações fiscais, faturamento e presença digital da clínica.</p>
+            <p className="text-slate-500 mt-1">Informações fiscais, segmento de atuação e presença digital.</p>
           </div>
         </div>
 
         <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
           
           <div className="p-8 space-y-8">
-            {/* Seção 1: Dados Fiscais */}
+            {/* Seção 1: Identificação e Dados Fiscais */}
             <fieldset>
               <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
                 <FileText className="w-4 h-4 text-blue-600" /> Identificação e Dados Fiscais
@@ -166,7 +223,43 @@ export default function CompanySettings() {
               </div>
             </fieldset>
 
-            {/* Seção 2: Endereço */}
+            {/* Seção Segmentação da Empresa */}
+            <fieldset>
+              <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
+                <Layers className="w-4 h-4 text-blue-600" /> Segmento de Atuação
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 border border-slate-200 rounded-xl shadow-inner">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">1. Categoria Principal</label>
+                  <select 
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium" 
+                    value={formData.categoria_principal} 
+                    onChange={e => setFormData({...formData, categoria_principal: e.target.value, subcategoria: ''})}
+                  >
+                    <option value="">Selecione o Macro Segmento...</option>
+                    {Object.keys(categoriasSistema).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">2. Natureza / Especialidade</label>
+                  <select 
+                    disabled={!formData.categoria_principal}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium disabled:bg-slate-100 disabled:text-slate-400" 
+                    value={formData.subcategoria} 
+                    onChange={e => setFormData({...formData, subcategoria: e.target.value})}
+                  >
+                    <option value="">Selecione a Especialidade...</option>
+                    {subcategoriasDisponiveis.map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+
+            {/* Seção Endereço */}
             <fieldset>
               <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
                 <MapPin className="w-4 h-4 text-blue-600" /> Endereço de Faturamento
@@ -201,20 +294,20 @@ export default function CompanySettings() {
               </div>
             </fieldset>
 
-            {/* 👇 DRCODE: Seção 3: Redes Sociais */}
+            {/* 👇 DRCODE: Seção Redes Sociais - Com UI Inteligente */}
             <fieldset>
               <legend className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 mb-4 border-b border-slate-100 pb-2 w-full">
                 <Share2 className="w-4 h-4 text-blue-600" /> Presença Digital e Redes Sociais
               </legend>
-              <p className="text-xs text-slate-500 mb-4">Adicione os links completos (ex: https://instagram.com/suaclinica). Eles poderão ser usados em recibos e portais de pacientes.</p>
+              <p className="text-xs text-slate-500 mb-4">Adicione apenas o seu nome de usuário. O sistema montará o link correto para envio de notificações.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Facebook */}
                 <div className="relative">
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">Facebook</label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Facebook className="w-4 h-4 text-blue-600" /></span>
-                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil ou página" value={formData.facebook_url} onChange={e => setFormData({...formData, facebook_url: e.target.value})} />
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-500 text-xs font-semibold"><Facebook className="w-4 h-4 text-blue-600 mr-1.5" /> facebook.com/</span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-700" placeholder="suaclinica" value={formData.facebook_handle} onChange={e => setFormData({...formData, facebook_handle: e.target.value})} />
                   </div>
                 </div>
 
@@ -222,8 +315,8 @@ export default function CompanySettings() {
                 <div className="relative">
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">Instagram</label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Instagram className="w-4 h-4 text-pink-600" /></span>
-                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil" value={formData.instagram_url} onChange={e => setFormData({...formData, instagram_url: e.target.value})} />
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-500 text-xs font-semibold"><Instagram className="w-4 h-4 text-pink-600 mr-1.5" /> instagram.com/</span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-700" placeholder="suaclinica" value={formData.instagram_handle} onChange={e => setFormData({...formData, instagram_handle: e.target.value})} />
                   </div>
                 </div>
 
@@ -231,8 +324,8 @@ export default function CompanySettings() {
                 <div className="relative">
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">X (Twitter)</label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Twitter className="w-4 h-4 text-slate-800" /></span>
-                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil" value={formData.twitter_url} onChange={e => setFormData({...formData, twitter_url: e.target.value})} />
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-500 text-xs font-semibold"><Twitter className="w-4 h-4 text-slate-800 mr-1.5" /> x.com/</span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-700" placeholder="suaclinica" value={formData.twitter_handle} onChange={e => setFormData({...formData, twitter_handle: e.target.value})} />
                   </div>
                 </div>
 
@@ -240,8 +333,8 @@ export default function CompanySettings() {
                 <div className="relative">
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">YouTube</label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Youtube className="w-4 h-4 text-red-600" /></span>
-                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do canal" value={formData.youtube_url} onChange={e => setFormData({...formData, youtube_url: e.target.value})} />
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-500 text-xs font-semibold"><Youtube className="w-4 h-4 text-red-600 mr-1.5" /> youtube.com/@</span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-700" placeholder="suaclinica" value={formData.youtube_handle} onChange={e => setFormData({...formData, youtube_handle: e.target.value})} />
                   </div>
                 </div>
 
@@ -249,8 +342,8 @@ export default function CompanySettings() {
                 <div className="relative">
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">TikTok</label>
                   <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 text-slate-500"><Globe className="w-4 h-4 text-slate-900" /></span>
-                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Link do perfil" value={formData.tiktok_url} onChange={e => setFormData({...formData, tiktok_url: e.target.value})} />
+                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-500 text-xs font-semibold"><Globe className="w-4 h-4 text-slate-900 mr-1.5" /> tiktok.com/@</span>
+                    <input className="flex-1 w-full px-3 py-2 border border-slate-300 rounded-r-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-700" placeholder="suaclinica" value={formData.tiktok_handle} onChange={e => setFormData({...formData, tiktok_handle: e.target.value})} />
                   </div>
                 </div>
 

@@ -21,10 +21,13 @@ class Tenant(AuditoriaMixin, Base):
     inscricao_estadual = Column(String(50), nullable=True)
     inscricao_municipal = Column(String(50), nullable=True)
     
-    segmento_atuacao = Column(String(100), nullable=False)
+    segmento_atuacao = Column(String(100), nullable=False) # Legado
+    # 👇 DRCODE: Nossas novas colunas de classificação em 2 níveis
+    categoria_principal = Column(String(100), nullable=True)
+    subcategoria = Column(String(100), nullable=True)
+    
     fuso_horario = Column(String(50), nullable=False)
 
-    # Endereço Completo
     endereco_cep = Column(String(20), nullable=True)
     endereco_logradouro = Column(String(255), nullable=False)
     endereco_numero = Column(String(50), nullable=True)
@@ -37,7 +40,6 @@ class Tenant(AuditoriaMixin, Base):
     email_contato = Column(String(255), nullable=False)
     telefone_contato = Column(String(20), nullable=False)
     
-    # 👇 DRCODE: Novas colunas de Redes Sociais
     facebook_url = Column(String(255), nullable=True)
     twitter_url = Column(String(255), nullable=True)
     instagram_url = Column(String(255), nullable=True)
@@ -49,6 +51,5 @@ class Tenant(AuditoriaMixin, Base):
     logotipo_url = Column(String(500), nullable=False)
 
     configuracoes_visuais = Column(JSON, nullable=True, default=dict)
-
     validade_assinatura = Column(DateTime, nullable=False)
     observacoes = Column(Text, nullable=True)

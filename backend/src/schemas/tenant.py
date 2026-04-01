@@ -12,6 +12,11 @@ class TenantBase(BaseModel):
     inscricao_municipal: Optional[str] = Field(None, max_length=50)
     
     segmento_atuacao: str = Field(..., max_length=100)
+    
+    # 👇 DRCODE: Adicionados ao Base
+    categoria_principal: Optional[str] = Field(None, max_length=100)
+    subcategoria: Optional[str] = Field(None, max_length=100)
+    
     fuso_horario: str = Field(..., max_length=50)
     
     endereco_cep: Optional[str] = Field(None, max_length=20)
@@ -26,7 +31,6 @@ class TenantBase(BaseModel):
     email_contato: EmailStr = Field(...)
     telefone_contato: str = Field(..., max_length=20)
     
-    # 👇 DRCODE: Campos de Redes Sociais adicionados
     facebook_url: Optional[str] = Field(None, max_length=255)
     twitter_url: Optional[str] = Field(None, max_length=255)
     instagram_url: Optional[str] = Field(None, max_length=255)
@@ -51,6 +55,11 @@ class TenantUpdate(BaseModel):
     inscricao_municipal: Optional[str] = Field(None, max_length=50)
     
     segmento_atuacao: Optional[str] = Field(None, max_length=100)
+    
+    # 👇 DRCODE: Adicionados ao Update
+    categoria_principal: Optional[str] = Field(None, max_length=100)
+    subcategoria: Optional[str] = Field(None, max_length=100)
+    
     fuso_horario: Optional[str] = Field(None, max_length=50)
     
     endereco_cep: Optional[str] = Field(None, max_length=20)
@@ -65,7 +74,6 @@ class TenantUpdate(BaseModel):
     email_contato: Optional[EmailStr] = None
     telefone_contato: Optional[str] = Field(None, max_length=20)
     
-    # 👇 DRCODE: Campos de Redes Sociais no Update
     facebook_url: Optional[str] = Field(None, max_length=255)
     twitter_url: Optional[str] = Field(None, max_length=255)
     instagram_url: Optional[str] = Field(None, max_length=255)
@@ -84,17 +92,10 @@ class TenantResponse(TenantBase):
     id: UUID
     codigo_visual: int
     validade_assinatura: datetime
-    
     criado_em: datetime
     criado_por: Optional[UUID] = None
-    criado_por_nome: Optional[str] = None
-    
     alterado_em: Optional[datetime] = None
     alterado_por: Optional[UUID] = None
-    alterado_por_nome: Optional[str] = None
-    
     deletado_em: Optional[datetime] = None
     deletado_por: Optional[UUID] = None
-    deletado_por_nome: Optional[str] = None
-
     model_config = ConfigDict(from_attributes=True)

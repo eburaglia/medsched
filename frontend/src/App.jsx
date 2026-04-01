@@ -26,8 +26,11 @@ import WhatsAppConnect from './pages/WhatsAppConnect';
 // Importando a página do Módulo de Importação (DataLoad)
 import DataLoad from './pages/DataLoad';
 
-// 👇 DRCODE: Importando a página de Dados Fiscais da Empresa
+// Importando a página de Dados Fiscais da Empresa
 import CompanySettings from './pages/CompanySettings';
+
+// 👇 DRCODE: Importando a nova página de Fornecedores
+import Suppliers from './pages/Suppliers';
 
 // Importando o nosso guarda-costas de rotas
 import ProtectedRoute from './components/ProtectedRoute';
@@ -91,6 +94,13 @@ function App() {
           </ProtectedRoute>
         } />
 
+        {/* 👇 DRCODE: Rota de Fornecedores adicionada no Nível 2 */}
+        <Route path="/fornecedores" element={
+          <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN', 'GESTOR']}>
+            <Suppliers />
+          </ProtectedRoute>
+        } />
+
         {/* Rotas Protegidas - Nível 3: Administração da Clínica */}
         <Route path="/configuracoes" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN']}>
@@ -98,7 +108,6 @@ function App() {
           </ProtectedRoute>
         } />
         
-        {/* 👇 NOVO: Rota para o painel de Dados da Empresa */}
         <Route path="/configuracoes/empresa" element={
           <ProtectedRoute allowedRoles={['SYSTEM_ADMIN', 'SUPER_ADMIN', 'TENANT_ADMIN']}>
             <CompanySettings />

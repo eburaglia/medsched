@@ -4,8 +4,8 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import Layout from '../components/Layout';
 import PerformanceBadge from '../components/PerformanceBadge';
-// 👇 DRCODE: Building2 adicionado à lista de ícones!
-import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug, CalendarDays, Database, Building2 } from 'lucide-react';
+// 👇 DRCODE: Ícone Truck (Camião) adicionado para os Fornecedores!
+import { Settings2, CreditCard, Shield, Bell, ArrowRight, Palette, Save, Plug, CalendarDays, Database, Building2, Truck } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -30,10 +30,10 @@ export default function Settings() {
         if (targetId) {
           setTenantId(targetId);
           
-          const startTime = performance.now(); // Inicia o cronômetro
+          const startTime = performance.now(); 
           
           api.get(`/tenants/${targetId}`).then(res => {
-            const endTime = performance.now(); // Fim da API
+            const endTime = performance.now(); 
             
             setFullTenantData(res.data);
             
@@ -42,7 +42,6 @@ export default function Settings() {
               setCorPrimaria(configVisuais.cor_primaria);
             }
 
-            // Calcula a performance do render
             requestAnimationFrame(() => {
               const renderTime = performance.now();
               const apiTotal = Math.round(endTime - startTime);
@@ -62,7 +61,7 @@ export default function Settings() {
           }).catch(console.error);
         }
       } catch (e) {
-        console.error("Erro ao decodificar token");
+        console.error("Erro ao descodificar token");
       }
     }
   }, []);
@@ -80,15 +79,14 @@ export default function Settings() {
       await api.put(`/tenants/${tenantId}`, dadosAtualizados);
       window.location.reload(); 
     } catch (error) {
-      console.error("Erro ao salvar cores", error);
-      alert("Erro ao salvar as configurações visuais.");
+      console.error("Erro ao guardar cores", error);
+      alert("Erro ao guardar as configurações visuais.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const menuItems = [
-    // 👇 DRCODE: Novo card de Dados da Empresa
     {
       title: "Dados da Empresa",
       description: "Informações fiscais, CNPJ, Inscrição Estadual e Endereço.",
@@ -96,22 +94,30 @@ export default function Settings() {
       path: "/configuracoes/empresa",
       active: true
     },
+    // 👇 DRCODE: O novo cartão de Fornecedores!
     {
-      title: "Regras de Faturamento",
-      description: "Taxas de maquininhas, bancos e gestão de convênios/parcerias.",
+      title: "Fornecedores e Parceiros",
+      description: "Gestão de empresas que fornecem produtos, consumíveis e serviços.",
+      icon: <Truck className="w-6 h-6" />,
+      path: "/fornecedores",
+      active: true
+    },
+    {
+      title: "Regras de Faturação",
+      description: "Taxas de terminais, bancos e gestão de convenções/parcerias.",
       icon: <CreditCard className="w-6 h-6" />,
       path: "/configuracoes/faturamento",
       active: true
     },
     {
       title: "Feriados e Expediente",
-      description: "Gerencie feriados e defina se a empresa abrirá ou não nestas datas.",
+      description: "Faça a gestão de feriados e defina se a empresa abrirá ou não nestas datas.",
       icon: <CalendarDays className="w-6 h-6" />,
       path: "/configuracoes/feriados",
       active: true
     },
     {
-      title: "Mensageria e Templates",
+      title: "Mensagens e Templates",
       description: "Configure os textos de e-mail, WhatsApp e avisos automáticos do sistema.",
       icon: <Bell className="w-6 h-6" />,
       path: "/configuracoes/notificacoes",
@@ -119,21 +125,21 @@ export default function Settings() {
     },
     {
       title: "Integrações Externas",
-      description: "Conecte seu servidor de E-mail (SMTP), API do WhatsApp e Bot do Telegram.",
+      description: "Ligue o seu servidor de E-mail (SMTP), API do WhatsApp e Bot do Telegram.",
       icon: <Plug className="w-6 h-6" />,
       path: "/configuracoes/integracoes",
       active: true
     },
     {
       title: "DataLoad Management",
-      description: "Importação em lote de clientes, feriados e serviços via planilha CSV/Excel.",
+      description: "Importação em lote de clientes, feriados e serviços via folha de cálculo CSV/Excel.",
       icon: <Database className="w-6 h-6" />,
       path: "/configuracoes/dataload",
       active: true
     },
     {
       title: "Segurança e Acesso",
-      description: "Controle de permissões por perfil e logs de auditoria.",
+      description: "Controlo de permissões por perfil e registos de auditoria.",
       icon: <Shield className="w-6 h-6" />,
       path: "/configuracoes/seguranca",
       active: false
@@ -187,7 +193,7 @@ export default function Settings() {
           <div className="flex flex-col md:flex-row gap-8 items-start md:items-center">
             <div className="flex-1">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Cor Principal do Sistema</label>
-              <p className="text-sm text-gray-500 mb-4">Esta cor será aplicada no menu lateral e nos botões de destaque para customizar o ambiente com a marca da sua empresa.</p>
+              <p className="text-sm text-gray-500 mb-4">Esta cor será aplicada no menu lateral e nos botões de destaque para personalizar o ambiente com a marca da sua empresa.</p>
               
               <div className="flex items-center gap-4">
                 <input
@@ -208,7 +214,7 @@ export default function Settings() {
               className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-5 h-5" />
-              {isSaving ? "Salvando..." : "Salvar Configuração"}
+              {isSaving ? "A guardar..." : "Guardar Configuração"}
             </button>
           </div>
         </div>
