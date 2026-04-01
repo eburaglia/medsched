@@ -154,10 +154,10 @@ export default function Suppliers() {
             </fieldset>
 
             <fieldset className="border border-slate-200 p-4 rounded-xl bg-slate-50/50 mt-4">
-              <legend className="text-sm font-bold text-slate-700 px-2 flex items-center gap-2"><Phone className="w-4 h-4"/> Contactos de Vendas</legend>
+              <legend className="text-sm font-bold text-slate-700 px-2 flex items-center gap-2"><Phone className="w-4 h-4"/> Contato de Vendas</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Pessoa de Contacto (Vendedor)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Pessoa de Contato (Vendedor)</label>
                   <input className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: João Silva" value={formData.contato_nome || ''} onChange={e => setFormData({...formData, contato_nome: e.target.value})} />
                 </div>
                 <div>
@@ -172,7 +172,7 @@ export default function Suppliers() {
             </fieldset>
 
             <fieldset className="border border-slate-200 p-4 rounded-xl bg-slate-50/50 mt-4">
-              <legend className="text-sm font-bold text-slate-700 px-2 flex items-center gap-2"><MapPin className="w-4 h-4"/> Morada</legend>
+              <legend className="text-sm font-bold text-slate-700 px-2 flex items-center gap-2"><MapPin className="w-4 h-4"/> Loradouro</legend>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
                 <div className="relative md:col-span-1">
                     <label className="block text-xs font-bold text-slate-700 mb-1">CEP</label>
@@ -180,7 +180,7 @@ export default function Suppliers() {
                     {isCheckingCEP && <Loader2 className="w-4 h-4 animate-spin absolute right-2 top-7 text-blue-500" />}
                 </div>
                 <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Logradouro</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Endereço</label>
                     <input className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" value={formData.endereco_logradouro || ''} onChange={e => setFormData({...formData, endereco_logradouro: e.target.value})} />
                 </div>
                 <div className="md:col-span-1">

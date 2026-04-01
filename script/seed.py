@@ -1,58 +1,58 @@
-import sys
-from datetime import datetime, timedelta
-from passlib.context import CryptContext
 from src.database import SessionLocal
-from src.models.user import User, UserStatus, UserRole
-from src.models.tenant import Tenant, TenantStatus
+from src.models.tenant import Tenant
+from src.models.user import User
+from src.models.customer import Customer
+from src.models.service import Service
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+db = SessionLocal()
 
-def run_seed():
-    db = SessionLocal()
-    try:
-        # 1. Cria a Clínica respeitando 100% das constraints (nullable=False)
-        t = Tenant(
-            status=TenantStatus.ATIVO,
-            nome="Clínica Master (Seed)",
-            segmento_atuacao="Saúde e Bem-estar",
-            fuso_horario="America/Sao_Paulo",
-            endereco_logradouro="Avenida Paulista, 1000",
-            endereco_cidade="São Paulo",
-            endereco_estado="SP",
-            endereco_regiao="Sudeste",
-            site_url="https://clinicamaster.com.br",
-            email_contato="contato@clinicamaster.com.br",
-            telefone_contato="(11) 99999-9999",
-            dominio_interno="clinica-master-seed",
-            url_externa="https://app.medsched.com/clinica-master",
-            logotipo_url="https://bucket.s3/logo-master.png",
-            validade_assinatura=datetime.utcnow() + timedelta(days=365) # 1 ano de assinatura
-        )
-        db.add(t)
-        db.flush() # Salva no banco e pega o ID sem fechar a transação
+try:
+    # Hash bcrypt universal para a senha "senha123"
+    hash_senha = "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjIQqiRQYq"
 
-        # 2. Cria o Usuário Mestre vinculado ao ID gerado acima
-        u = User(
-            tenant_id=t.id,
-            nome="Dr. Admin",
-            email="admin@clinica.com",
-            senha_hash=pwd_context.hash("123456"),
-            status=UserStatus.ATIVO,
-            papel=UserRole.TENANT_ADMIN
-        )
-        db.add(u)
-        db.commit() # Comita Tenant e User juntos (Transação Atômica)
-        
-        print("\n" + "="*50)
-        print("✅ SUCESSO! FUNDAÇÃO E ACESSO MESTRE CRIADOS.")
-        print("📧 Email de Login: admin@clinica.com")
-        print("🔑 Senha: 123456")
-        print("="*50 + "\n")
-    except Exception as e:
-        db.rollback()
-        print(f"\n❌ Erro durante a inserção: {e}\n")
-    finally:
-        db.close()
+    # 1. Cria a Clínica
+    t = Tenant(nome="Clinica da Maria")
+    db.add(t)
+    db.commit()
 
-if __name__ == "__main__":
-    run_seed()
+    # 2. Cria a Maria
+    u = User(email="maria@clinica.com", hashed_password=hash_senha, tenant_id=t.id)
+    if hasattr(u, 'nome'): u.nome = "Dra. Maria"
+    db.add(u)
+
+    # 3. Cria o Paciente
+    c = Customer(nome="Joao Paciente", tenant_id=t.id)
+    db.add(c)
+
+    # 4. Cria o Serviço
+    s = Service(nome="Fisioterapia", preco=150.0, duracao_minutos=60, tenant_id=t.id)
+    db.add(s)
+
+    db.commit()
+
+    print("\n" + "🚀 "*15)
+    print("DADOS INJETADOS COM SUCESSO!")
+    print("Vá no Swagger, clique em 'Authorize' (Cadeado) e faça o Login:")
+    print("Email: maria@clinica.com")
+    print("Senha: senha123")
+    print("🚀 "*15)
+    print("\n📋 COPIE ESTE JSON PARA O POST /appointments/:\n")
+    print(f"""{{
+  "customer_id": "{c.id}",
+  "professional_id": "{u.id}",
+  "servico_id": "{s.id}",
+  "recurso_id": null,
+  "data_hora_inicio": "2026-03-10T14:00:00.000Z",
+  "data_hora_fim": "2026-03-10T15:00:00.000Z",
+  "status": "agendado",
+  "observacoes": "Sessões de Fisioterapia Semanais",
+  "tenant_id": "{t.id}",
+  "tipo_recorrencia": "semanal",
+  "quantidade_recorrencia": 5
+}}""")
+    print("\n" + "="*45)
+
+except Exception as e:
+    print(f"Erro: {e}")
+finally:
+    db.close()
